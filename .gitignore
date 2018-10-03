@@ -1,0 +1,9 @@
+*.bat
+*.txt
+*.log
+*.json
+*.exe
+Procfile
+deps/
+main.lua
+package.lua
