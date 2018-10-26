@@ -449,4 +449,4 @@ binBase64.decode = function(code)
 	return decode64(code)
 end
 
-return base64
+return binBase64
