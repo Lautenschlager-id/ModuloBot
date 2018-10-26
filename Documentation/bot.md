@@ -24,7 +24,8 @@
 | meta | table | Global metamethods used in many parts of the system.<br>1. **__add(a, b)** ~> Adds two tables. |
 | modules | table | The data of the modules in the server. |
 | globalCommands | table | The global commands made by users in the server. |
-| activeChannels | table | The activity channels control. |
+| activeChannels | table | The channel activity control. |
+| activeMembers | table | The member activity control. |
 | ![admin_only](https://i.imgur.com/GWJg6TA.png)currency | table | Flags of the country currency codes used in the command **!coin**. |
 ## Static Methods
 ### concat(tbl, sep, f, i, j, iter)
@@ -157,6 +158,14 @@
 >| denied | table |  |
 >
 >Sends allowed and denied permissions at the same time to the server.
+
+### sortActivityTable(list, f)
+>| Parameter | Type | Optional |
+>|-|-|:-:|
+>| list | table |  |
+>| f | function | ✔ |
+>
+>Sorts and returns an activity table (channel, member) in decrescent order { id, value } and the sum of values of all the indexes
 
 ### splitByChar(content, max)
 >| Parameter | Type | Optional |
