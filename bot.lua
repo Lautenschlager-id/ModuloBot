@@ -1,16 +1,3 @@
---[[
-	Documentation Format:
-	- Starts with "Doc" and long comment
-	- ~
-		^ "Admin only"
-	- "Description"
-	- @param type
-		* type1|type2|...
-	- @param optional_type*
-	- >return_type
-	- !type
-]]
-
 --[[ Discordia ]]--
 local discordia = require("discordia")
 discordia.extensions()
