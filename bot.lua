@@ -1060,7 +1060,7 @@ local getRate = function(value, of, max)
 	max = max or 10
 
 	local rate = math.min(max, (value * (max / of)))
-	return string.format("`[%s%s] %.3f%%`", string.rep('|', rate), string.rep(' ', max - rate), (value / of * 100))
+	return string.format("`[%s%s] %.2f%%`", string.rep('|', rate), string.rep(' ', max - rate), (value / of * 100))
 end
 
 --[[Doc
@@ -1844,6 +1844,40 @@ commands["a801"] = {
 		end
 	end
 }
+commands["activity"] = {
+	auth = permissions.public,
+	description = "Displays the channels' and members' activity.",
+	f = function(message)
+		local cachedChannels, loggedMessages = sortActivityTable(activeChannels, function(id) return not client:getChannel(id) end)
+		local cachedMembers, loggedMemberMessages = sortActivityTable(activeMembers, function(id) return not message.guild:getMember(id) end)
+
+		toDelete[message.id] = message:reply({
+			content = "<@" .. message.author.id .. ">",
+			embed = {
+				color = color.interaction,
+
+				fields = {
+					[1] = {
+						name = ":bar_chart: " .. os.date("%B") .. "'s active members",
+						value = concat(cachedMembers, "\n", function(index, value)
+							local member = message.guild:getMember(value[1])
+							return (index > 3 and ":medal: " or ":" .. (index == 1 and "first" or index == 2 and "second" or "third") .. "_place: ") .. "<@" .. member.id .. "> `" .. member.name .. "`\n" .. getRate(value[2], loggedMemberMessages, 30) .. " [" .. value[2] .. "]"
+						end, 1, 10),
+						inline = false
+					},
+					[2] = {
+						name = ":chart_with_upwards_trend: " .. os.date("%B") .. "'s active channels",
+						value = concat(cachedChannels, "\n", function(index, value)
+							local channel = client:getChannel(value[1])
+							return (index > 3 and ":medal: " or ":" .. (index == 1 and "first" or index == 2 and "second" or "third") .. "_place: ") .. (channel.category and (channel.category.name .. ".#") or "#") .. channel.name .. "\n" .. getRate(value[2], loggedMessages, 30) .. " [" .. value[2] .. "]"
+						end, 1, 5),
+						inline = false
+					}
+				}
+			}
+		})
+	end
+}
 commands["adoc"] = {
 	auth = permissions.public,
 	description = "Gets information about a specific tfm api function.",
@@ -2416,8 +2450,12 @@ commands["serverinfo"] = {
 
 		local bots = members:count(function(member) return member.bot end)
 
-		local cachedChannels, loggedMessages = sortActivityTable(activeChannels, function(id) return not client:getChannel(id) end)
-		local cachedMembers, loggedMemberMessages = sortActivityTable(activeMembers, function(id) return not message.guild:getMember(id) end)
+		local moduleCommands = 0
+		for k, v in next, modules do
+			if v.commands then
+				moduleCommands = moduleCommands + table.count(v.commands)
+			end
+		end
 
 		toDelete[message.id] = message:reply({
 			content = "<@" .. message.author.id .. ">",
@@ -2480,21 +2518,10 @@ commands["serverinfo"] = {
 						inline = false
 					},
 					[6] = {
-						name = ":chart_with_upwards_trend: " .. os.date("%B") .. "'s active channels",
-						value = concat(cachedChannels, "\n", function(index, value)
-							local channel = client:getChannel(value[1])
-							return (index > 3 and ":medal: " or ":" .. (index == 1 and "first" or index == 2 and "second" or "third") .. "_place: ") .. (channel.category and (channel.category.name .. ".#") or "#") .. channel.name .. "\n" .. getRate(value[2], loggedMessages, 30) .. " [" .. value[2] .. "]"
-						end, 1, 5),
+						name = ":exclamation: Commands",
+						value = "**Bot commands**: " .. table.count(commands) .. "\n**Global Commands**: " .. table.count(globalCommands) .. "\n**Module Commands**: " .. moduleCommands,
 						inline = false
 					},
-					[7] = {
-						name = ":bar_chart: " .. os.date("%B") .. "'s active members",
-						value = concat(cachedMembers, "\n", function(index, value)
-							local member = message.guild:getMember(value[1])
-							return (index > 3 and ":medal: " or ":" .. (index == 1 and "first" or index == 2 and "second" or "third") .. "_place: ") .. "<@" .. member.id .. "> `" .. member.name .. "`\n" .. getRate(value[2], loggedMemberMessages, 30) .. " [" .. value[2] .. "]"
-						end, 1, 5),
-						inline = false
-					}
 				},
 			}
 		})
