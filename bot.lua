@@ -931,11 +931,17 @@ local modules = {}
 ]]
 local globalCommands = {}
 --[[Doc
-	"The activity channels control."
+	"The channel activity control."
 	!table
 ]]
 local activeChannels = {}
 local lastMemberTexting = {}
+--[[Doc
+	"The member activity control."
+	!table
+]]
+local activeMembers = {}
+local memberTimers = {}
 --[[Doc
 	~
 	"Flags of the country currency codes used in the command **!coin**."
@@ -1209,6 +1215,18 @@ local messageCreate = function(message, skipChannelActivity)
 					activeChannels[message.channel.id] = activeChannels[message.channel.id] + 1
 				end
 			end
+
+			if not memberTimers[message.author.id] then
+				memberTimers[message.author.id] = 0
+			end
+			if os.time() > memberTimers[message.author.id] then
+				memberTimers[message.author.id] = os.time() + 5
+				if not activeMembers[message.author.id] then
+					activeMembers[message.author.id] = 1
+				else
+					activeMembers[message.author.id] = activeMembers[message.author.id] + 1
+				end
+			end
 		end
 		return
 	end
@@ -1331,6 +1349,9 @@ local messageDelete = function(message, skipChannelActivity)
 		if (os.time() - 60) < discordia.Date.fromISO(message.timestamp):toSeconds() then
 			if activeChannels[message.channel.id] and activeChannels[message.channel.id] > 0 then
 				activeChannels[message.channel.id] = activeChannels[message.channel.id] - 1
+			end
+			if activeMembers[message.author.id] and activeMembers[message.author.id] > 0 then
+				activeMembers[message.author.id] = activeMembers[message.author.id] - 1
 			end
 		end
 	end
@@ -1521,6 +1542,26 @@ local setPermissions = function(permission, allowed, denied)
 	permission:setPermissions(o_allowed, o_denied)
 end
 --[[Doc
+	"Sorts and returns an activity table (channel, member) in decrescent order { id, value } and the sum of values of all the indexes"
+	@list table
+	@f function*
+	>table, int
+]]
+local sortActivityTable = function(list, f)
+	local total, out, counter = 0, { }, 0
+	for k, v in next, table.copy(list) do
+		if (f and f(k, v)) or v < 1 then
+			list[k] = nil
+		else
+			counter = counter + 1
+			out[counter] = { k, v }
+			total = total + v
+		end
+	end
+	table.sort(out, function(c1, c2) return c1[2] > c2[2] end)
+	return out, total
+end
+--[[Doc
 	"Splits a string by characters until it reaches the max size."
 	@content string
 	@max int*
@@ -1617,8 +1658,9 @@ end
 local getLuaEnv = function()
 	return {
 		activeChannels = table.copy(activeChannels),
+		activeMembers = table.copy(activeMembers),
 		authIds = table.copy(authIds),
-		
+
 		base64 = table.copy(base64),
 		binBase64 = table.copy(binBase64),
 		bit32 = table.copy(bit),
@@ -1659,13 +1701,14 @@ local getLuaEnv = function()
 		roleFlags = table.copy(roleFlags),
 		roles = table.copy(roles),
 
+		sortActivityTable = sortActivityTable,
 		splitByChar = splitByChar,
 		splitByLine = splitByLine,
 		string = table.copy(string),
 
 		table = table.copy(table),
 
-		validPattern = validPattern,		
+		validPattern = validPattern,
 	}
 end
 
@@ -2373,17 +2416,8 @@ commands["serverinfo"] = {
 
 		local bots = members:count(function(member) return member.bot end)
 
-		local loggedMessages, channels, counter = 0, { }, 0
-		for k, v in next, table.copy(activeChannels) do
-			if not client:getChannel(k) or v < 1 then
-				activeChannels[k] = nil
-			else
-				counter = counter + 1
-				channels[counter] = { k, v }
-				loggedMessages = loggedMessages + v
-			end
-		end
-		table.sort(channels, function(c1, c2) return c1[2] > c2[2] end)
+		local cachedChannels, loggedMessages = sortActivityTable(activeChannels, function(id) return not client:getChannel(id) end)
+		local cachedMembers, loggedMemberMessages = sortActivityTable(activeMembers, function(id) return not message.guild:getMember(id) end)
 
 		toDelete[message.id] = message:reply({
 			content = "<@" .. message.author.id .. ">",
@@ -2446,10 +2480,18 @@ commands["serverinfo"] = {
 						inline = false
 					},
 					[6] = {
-						name = ":chart_with_upwards_trend: Active channels",
-						value = concat(channels, "\n", function(index, value)
+						name = ":chart_with_upwards_trend: " .. os.date("%B") .. "'s active channels",
+						value = concat(cachedChannels, "\n", function(index, value)
 							local channel = client:getChannel(value[1])
 							return (index > 3 and ":medal: " or ":" .. (index == 1 and "first" or index == 2 and "second" or "third") .. "_place: ") .. (channel.category and (channel.category.name .. ".#") or "#") .. channel.name .. "\n" .. getRate(value[2], loggedMessages, 30) .. " [" .. value[2] .. "]"
+						end, 1, 5),
+						inline = false
+					},
+					[7] = {
+						name = ":bar_chart: " .. os.date("%B") .. "'s active members",
+						value = concat(cachedMembers, "\n", function(index, value)
+							local member = message.guild:getMember(value[1])
+							return (index > 3 and ":medal: " or ":" .. (index == 1 and "first" or index == 2 and "second" or "third") .. "_place: ") .. "<@" .. member.id .. "> `" .. member.name .. "`\n" .. getRate(value[2], loggedMemberMessages, 30) .. " [" .. value[2] .. "]"
 						end, 1, 5),
 						inline = false
 					}
@@ -2835,7 +2877,7 @@ commands["lua"] = {
 
 			local ENV = (hasAuth and devENV or moduleENV) + getLuaEnv()
 			ENV.discord = { }
-			
+
 			--[[Doc
 				"The id of the user that ran **!lua**."
 				!string|int
@@ -3739,6 +3781,8 @@ commands["exit"] = {
 		save("b_modules", modules)
 		save("b_gcommands", globalCommands)
 		save("b_activechannels", activeChannels)
+		save("b_activemembers", activeMembers)
+
 		message:delete()
 		log("INFO", "Disconnected from '" .. client.user.name .. "'", logColor.red)
 		os.exit()
@@ -3834,6 +3878,7 @@ client:on("ready", function()
 	modules = getDatabase("b_modules")
 	globalCommands = getDatabase("b_gcommands")
 	activeChannels = getDatabase("b_activechannels")
+	activeMembers = getDatabase("b_activemembers")
 
 	-- Imageshack
 	if not io.popen("convert"):read() then
@@ -3940,6 +3985,9 @@ client:on("memberJoin", function(member)
 end)
 client:on("memberLeave", function(member)
 	client:getChannel(channels["logs"]):send("<@" .. member.id .. "> [" .. member.name .. "] just left!")
+	if activeMembers[member.id] then
+		activeMembers[member.id] = nil
+	end
 end)
 
 client:on("reactionAddUncached", function(channel, messageId, hash, userId)
@@ -3992,6 +4040,12 @@ client:on("reactionRemove", function(reaction, userId)
 	end
 end)
 
+client:on("channelDelete", function(channel)
+	if activeChannels[channel.id] then
+		activeChannels[channel.id] = nil
+	end
+end)
+
 clock:on("min", function()
 	if not modules then return end
 	minutes = minutes + 1
@@ -4002,6 +4056,7 @@ clock:on("min", function()
 
 	if minutes % 5 == 0 then
 		save("b_activechannels", activeChannels)
+		save("b_activemembers", activeMembers)
 	end
 
 	for k, v in next, table.deepcopy(polls) do
