@@ -2853,17 +2853,17 @@ commands["lua"] = {
 				"The id of the user that ran **!lua**."
 				!string|int
 			]]
-			ENV.discord.authorId = message.author.id,
+			ENV.discord.authorId = message.author.id
 			--[[Doc
 				"The name and discriminator of the user that ran **!lua**."
 				!string
 			]]
-			ENV.discord.authorName = message.author.fullname,
+			ENV.discord.authorName = message.author.fullname
 			--[[Doc
 				"The id of the script message from **!lua**."
 				!string|int
 			]]
-			ENV.discord.messageId = message.id,
+			ENV.discord.messageId = message.id
 			--[[Doc
 				"Deletes a message sent by the bot."
 				@msgId string|int
@@ -2976,7 +2976,7 @@ commands["lua"] = {
 				--[[Doc
 					~
 					"The channel where the message was sent."
-					!Discordia.TextChannel
+					!Discordia.GuildTextChannel
 				]]
 				ENV.channel = message.channel
 				--[[Doc
