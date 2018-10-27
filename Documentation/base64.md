@@ -2,7 +2,7 @@
 ### encode(code)
 >| Parameter | Type | Optional |
 >|-|-|:-:|
->| code | string |  |
+>| code | `string` |  |
 >
 >Encodes a string in Base64.
 >
@@ -11,7 +11,7 @@
 ### decode(code)
 >| Parameter | Type | Optional |
 >|-|-|:-:|
->| code | string |  |
+>| code | `string` |  |
 >
 >Decodes a Base64-crypted string.
 >

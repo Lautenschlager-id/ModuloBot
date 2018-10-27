@@ -15,6 +15,6 @@
 ### print(...)
 >| Parameter | Type | Optional |
 >|-|-|:-:|
->| ... | * |  |
+>| ... | `*` |  |
 >
 >Prints a string in the channel.

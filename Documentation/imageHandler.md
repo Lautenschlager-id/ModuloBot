@@ -4,7 +4,7 @@
 ### ![admin_only](https://i.imgur.com/GWJg6TA.png)fromURL(url)
 >| Parameter | Type | Optional |
 >|-|-|:-:|
->| url | string |  |
+>| url | `string` |  |
 >
 >Downloads an image using a linux command
 >

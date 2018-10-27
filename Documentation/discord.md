@@ -8,24 +8,24 @@
 ### delete(msgId)
 >| Parameter | Type | Optional |
 >|-|-|:-:|
->| msgId | string\|int |  |
+>| msgId | `string` \| `int` |  |
 >
 >Deletes a message sent by the bot.
 
 ### http(url, header, body, token)
 >| Parameter | Type | Optional |
 >|-|-|:-:|
->| url | string |  |
->| header | table | ✔ |
->| body | string | ✔ |
->| token | string\|table | ✔ |
+>| url | `string` |  |
+>| header | `table` | ✔ |
+>| body | `string` | ✔ |
+>| token | `string` \| `table` | ✔ |
 >
 >Performs a GET HTTP request.
 
 ### reply(text)
 >| Parameter | Type | Optional |
 >|-|-|:-:|
->| text | string\|table |  |
+>| text | `string` \| `table` |  |
 >
 >Sends a message in the channel.
 >
@@ -34,16 +34,16 @@
 ### sendError(command, err, description)
 >| Parameter | Type | Optional |
 >|-|-|:-:|
->| command | string |  |
->| err | string |  |
->| description | string | ✔ |
+>| command | `string` |  |
+>| err | `string` |  |
+>| description | `string` | ✔ |
 >
 >Sends an error message in the channel.
 
 ### load(src)
 >| Parameter | Type | Optional |
 >|-|-|:-:|
->| src | string |  |
+>| src | `string` |  |
 >
 >Loads a Lua code given in a string.
 >

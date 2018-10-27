@@ -31,12 +31,12 @@
 ### concat(tbl, sep, f, i, j, iter)
 >| Parameter | Type | Optional |
 >|-|-|:-:|
->| tbl | table |  |
->| sep | string | ✔ |
->| f | function | ✔ |
->| i | int | ✔ |
->| j | int | ✔ |
->| iter | function | ✔ |
+>| tbl | `table` |  |
+>| sep | `string` | ✔ |
+>| f | `function` | ✔ |
+>| i | `int` | ✔ |
+>| j | `int` | ✔ |
+>| iter | `function` | ✔ |
 >
 >table.concat with a function that affects all the itered values.
 >
@@ -45,8 +45,8 @@
 ### pairsByIndexes(list, f)
 >| Parameter | Type | Optional |
 >|-|-|:-:|
->| list | table |  |
->| f | function | ✔ |
+>| list | `table` |  |
+>| f | `function` | ✔ |
 >
 >Iters over a table in a sorted order.
 >
@@ -55,7 +55,7 @@
 ### removeAccents(str)
 >| Parameter | Type | Optional |
 >|-|-|:-:|
->| str | string |  |
+>| str | `string` |  |
 >
 >Removes the accents in the string
 >
@@ -64,7 +64,7 @@
 ### encodeUrl(url)
 >| Parameter | Type | Optional |
 >|-|-|:-:|
->| url | string |  |
+>| url | `string` |  |
 >
 >Encodes a string in the HTML format. Escapes all the characters.
 >
@@ -73,26 +73,26 @@
 ### getCommandFormat(str)
 >| Parameter | Type | Optional |
 >|-|-|:-:|
->| str | string |  |
+>| str | `string` |  |
 >
 >Splits a string in a command-generator format (script, content, title, and description).
 
 ### getCommandTable(message, script, content, title, description)
 >| Parameter | Type | Optional |
 >|-|-|:-:|
->| message | Discordia.Message |  |
->| script | string | ✔ |
->| content | string | ✔ |
->| title | string | ✔ |
->| description | string | ✔ |
+>| message | `Discordia.Message` |  |
+>| script | `string` | ✔ |
+>| content | `string` | ✔ |
+>| title | `string` | ✔ |
+>| description | `string` | ✔ |
 >
 >Creates the executable function given by the command-generator format (script, content, title, and description).
 
 ### ![admin_only](https://i.imgur.com/GWJg6TA.png)getDatabase(fileName, raw)
 >| Parameter | Type | Optional |
 >|-|-|:-:|
->| fileName | string |  |
->| raw | boolean | ✔ |
+>| fileName | `string` |  |
+>| raw | `boolean` | ✔ |
 >
 >Gets a database content.
 >
@@ -101,9 +101,9 @@
 ### getRate(value, of, max)
 >| Parameter | Type | Optional |
 >|-|-|:-:|
->| value | number |  |
->| of | number | ✔ |
->| max | number | ✔ |
+>| value | `number` |  |
+>| of | `number` | ✔ |
+>| max | `number` | ✔ |
 >
 >Generates a string to represent a rate in the format `[| ] 50%`
 >
@@ -112,9 +112,9 @@
 ### hasPermission(permission, member, message)
 >| Parameter | Type | Optional |
 >|-|-|:-:|
->| permission | int |  |
->| member | Discordia.Member |  |
->| message | Discordia.Message | ✔ |
+>| permission | `int` |  |
+>| member | `Discordia.Member` |  |
+>| message | `Discordia.Message` | ✔ |
 >
 >Verifies if an user has permission over a specific permission flag.
 >
@@ -123,16 +123,16 @@
 ### ![admin_only](https://i.imgur.com/GWJg6TA.png)log(category, text, color)
 >| Parameter | Type | Optional |
 >|-|-|:-:|
->| category | string\|number |  |
->| text | string\|number |  |
->| color | int |  |
+>| category | `string` \| `number` |  |
+>| text | `string` \| `number` |  |
+>| color | `int` |  |
 >
 >Sends a console log.
 
 ### normalizeDiscriminator(discriminator)
 >| Parameter | Type | Optional |
 >|-|-|:-:|
->| discriminator | string |  |
+>| discriminator | `string` |  |
 >
 >Normalizes a Transformice's nickname's discriminator, removing the `#0000` and highlighting `#xxxx`.
 >
@@ -141,9 +141,9 @@
 ### ![admin_only](https://i.imgur.com/GWJg6TA.png)save(fileName, db, append)
 >| Parameter | Type | Optional |
 >|-|-|:-:|
->| fileName | string |  |
->| db | table\|string |  |
->| append | boolean | ✔ |
+>| fileName | `string` |  |
+>| db | `table` \| `string` |  |
+>| append | `boolean` | ✔ |
 >
 >Saves a database.
 >
@@ -152,35 +152,35 @@
 ### ![admin_only](https://i.imgur.com/GWJg6TA.png)sendError(message, command, err, description)
 >| Parameter | Type | Optional |
 >|-|-|:-:|
->| message | Discordia.Message |  |
->| command | string |  |
->| err | stirng |  |
->| description | string | ✔ |
+>| message | `Discordia.Message` |  |
+>| command | `string` |  |
+>| err | `stirng` |  |
+>| description | `string` | ✔ |
 >
 >Sends a message error in the channel.
 
 ### ![admin_only](https://i.imgur.com/GWJg6TA.png)setPermissions(permission, allowed, denied)
 >| Parameter | Type | Optional |
 >|-|-|:-:|
->| permission | Discordia.Permissions |  |
->| allowed | table |  |
->| denied | table |  |
+>| permission | `Discordia.Permissions` |  |
+>| allowed | `table` |  |
+>| denied | `table` |  |
 >
 >Sends allowed and denied permissions at the same time to the server.
 
 ### sortActivityTable(list, f)
 >| Parameter | Type | Optional |
 >|-|-|:-:|
->| list | table |  |
->| f | function | ✔ |
+>| list | `table` |  |
+>| f | `function` | ✔ |
 >
 >Sorts and returns an activity table (channel, member) in decrescent order { id, value } and the sum of values of all the indexes
 
 ### splitByChar(content, max)
 >| Parameter | Type | Optional |
 >|-|-|:-:|
->| content | string |  |
->| max | int | ✔ |
+>| content | `string` |  |
+>| max | `int` | ✔ |
 >
 >Splits a string by characters until it reaches the max size.
 >
@@ -189,8 +189,8 @@
 ### splitByLine(content, max)
 >| Parameter | Type | Optional |
 >|-|-|:-:|
->| content | string |  |
->| max | int | ✔ |
+>| content | `string` |  |
+>| max | `int` | ✔ |
 >
 >Splits a string by lines until it reaches the max size.
 >
@@ -203,9 +203,9 @@
 ### validPattern(message, src, pattern)
 >| Parameter | Type | Optional |
 >|-|-|:-:|
->| message | Discordia.Message |  |
->| src | string |  |
->| pattern | string |  |
+>| message | `Discordia.Message` |  |
+>| src | `string` |  |
+>| pattern | `string` |  |
 >
 >Verifies if a pattern is valid and sends a message if not.
 >
@@ -220,6 +220,6 @@
 ### ![admin_only](https://i.imgur.com/GWJg6TA.png)printf(...)
 >| Parameter | Type | Optional |
 >|-|-|:-:|
->| ... | * |  |
+>| ... | `*` |  |
 >
 >Prints a string in the console.
