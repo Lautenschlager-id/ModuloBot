@@ -12,12 +12,13 @@
 >
 >Deletes a message sent by the bot.
 
-### http(url, header, body)
+### http(url, header, body, token)
 >| Parameter | Type | Optional |
 >|-|-|:-:|
 >| url | string |  |
 >| header | table | ✔ |
 >| body | string | ✔ |
+>| token | string|table | ✔ |
 >
 >Performs a GET HTTP request.
 

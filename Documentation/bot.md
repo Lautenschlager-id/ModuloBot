@@ -21,7 +21,7 @@
 | ![admin_only](https://i.imgur.com/GWJg6TA.png)commands | table | All the bot commands. |
 | devRestrictions | table | The restrictions for the admin's environment in **!lua**. |
 | moduleRestrictions | table | The restrictions for the developers' environment in **!lua**. |
-| meta | table | Global metamethods used in many parts of the system.<br>1. **__add(a, b)** ~> Adds two tables. |
+| meta | table | Global metamethods used in many parts of the system.<br>1. **__add(tbl, new)** ~> Adds two tables. |
 | modules | table | The data of the modules in the server. |
 | globalCommands | table | The global commands made by users in the server. |
 | activeChannels | table | The channel activity control. |
@@ -51,6 +51,15 @@
 >Iters over a table in a sorted order.
 >
 >**Returns:** `function` | `nil`
+
+### removeAccents(str)
+>| Parameter | Type | Optional |
+>|-|-|:-:|
+>| str | string |  |
+>
+>Removes the accents in the string
+>
+>**Returns:** `stirng`
 
 ### encodeUrl(url)
 >| Parameter | Type | Optional |
