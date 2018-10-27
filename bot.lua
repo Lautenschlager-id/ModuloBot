@@ -881,8 +881,10 @@ end
 	!table
 ]]
 local tokens = {
-	mice_clan = os.readFile("Content/db_token.txt", "*l"),
+	miceclan = os.readFile("Content/db_token.txt", "*l"),
 	fixer = os.readFile("Content/fixer_token.txt", "*l"),
+	mashape = os.readFile("Content/mashape_token.txt", "*l"),
+	openweather = os.readFile("Content/openweathermap_token.txt", "*l")
 }
 
 --[[ System ]]--
@@ -907,7 +909,7 @@ local moduleRestrictions = { "debug", "dofile", "io", "load", "loadfile", "loads
 
 --[[Doc
 	"Global metamethods used in many parts of the system.
-	1. **__add(a, b)** ~> Adds two tables."
+	1. **__add(tbl, new)** ~> Adds two tables."
 	!table
 ]]
 local meta = {
@@ -965,6 +967,34 @@ local toDelete = setmetatable({}, {
 })
 
 --[[ Functions ]]--
+local removeAccents
+do
+	local letters = {
+		["a"] = "áàâäãå",
+		["e"] = "éèêë",
+		["i"] = "íìîï",
+		["o"] = "óòôöõ",
+		["u"] = "úùûü",
+		["c"] = 'ç',
+		["n"] = 'ñ',
+		["y"] = "ýÿ"
+	}
+	--[[Doc
+		"Removes the accents in the string"
+		@str string
+		>stirng
+	]]
+	removeAccents = function(str)
+		for s = 1, 2 do
+			local f = (s == 1 and string.lower or string.upper)
+			for letter, repl in next, letters do
+				str = string.gsub(str, "[" .. f(repl) .. "]", f(letter))
+			end
+		end
+		return str
+	end
+end
+
 --[[Doc
 	"Encodes a string in the HTML format. Escapes all the characters."
 	@url string
@@ -1037,7 +1067,7 @@ end
 	>table|string
 ]]
 local getDatabase = function(fileName, raw)
-	local head, body = http.request("GET", "http://miceclan.com/translators/get?k=" .. tokens.mice_clan .. "&f=" .. fileName)
+	local head, body = http.request("GET", "http://miceclan.com/translators/get?k=" .. tokens.miceclan .. "&f=" .. fileName)
 	body = body:gsub("%(%(12%)%)", "+")
 
 	local out = (raw and body or json.decode(body))
@@ -1503,7 +1533,7 @@ end
 	>boolean
 ]]
 local save = function(fileName, db, append)
-	local http, body = http.request("PUT", "http://miceclan.com/translators/set?k=" .. tokens.mice_clan .. "&f=" .. fileName .. (append and "&a=a" or ''), nil, "d=" .. (append and tostring(db) or json.encode(db)):gsub("%+", "((12))"))
+	local http, body = http.request("PUT", "http://miceclan.com/translators/set?k=" .. tokens.miceclan .. "&f=" .. fileName .. (append and "&a=a" or ''), nil, "d=" .. (append and tostring(db) or json.encode(db)):gsub("%+", "((12))"))
 
 	return body == "true"
 end
@@ -1674,6 +1704,7 @@ local getLuaEnv = function()
 		debugAction = table.copy(debugAction),
 		devRestrictions = table.copy(devRestrictions),
 
+		encodeUrl = encodeUrl,
 		envTfm = table.deepcopy(envTfm),
 
 		getCommandFormat = getCommandFormat,
@@ -1697,6 +1728,7 @@ local getLuaEnv = function()
 		permissionOverwrites = table.deepcopy(permissionOverwrites),
 		permMaps = table.copy(permMaps),
 
+		removeAccents = removeAccents,
 		roleColor = table.copy(roleColor),
 		roleFlags = table.copy(roleFlags),
 		roles = table.copy(roles),
@@ -2389,6 +2421,16 @@ commands["modules"] = {
 		end
 	end
 }
+commands["nick"] = {
+	auth = permissions.public,
+	description = "Changes your nickname in the server. (Blessed command for mobile users)",
+	f = function(message, parameters)
+		if parameters and #parameters > 0 then
+			message.member:setNickname(parameters)
+			message:delete()
+		end
+	end
+}
 commands["quote"] = {
 	auth = permissions.public,
 	description = "Quotes an old message.",
@@ -2951,10 +2993,26 @@ commands["lua"] = {
 				@url string
 				@header table*
 				@body string*
+				@token string|table*
 				>table, string
 			]]
-			ENV.discord.http = function(url, header, body)
+			ENV.discord.http = function(url, header, body, token)
 				assert(url, "Missing url link in discord.http")
+
+				if token then
+					if type(token) == "string" then
+						if (tokens[token] and string.find(url, token)) then
+							url = url .. tokens[token]
+						end
+					else
+						if (token[2] and tokens[token[2]] and string.find(url, token[2])) then
+							if not header then
+								header = { }
+							end
+							header[#header + 1] = { token[1], tokens[token[2]] }
+						end
+					end
+				end
 
 				return http.request("GET", url, header, body)
 			end
@@ -3818,8 +3876,10 @@ commands["exit"] = {
 commands["refresh"] = {
 	description = "Refreshes the bot.",
 	f = function(message)
-		message:delete()
+		save("b_activechannels", activeChannels)
+		save("b_activemembers", activeMembers)
 
+		message:delete()
 		os.execute("luvit bot.lua")
 		os.exit()
 	end
@@ -3932,20 +3992,20 @@ client:on("ready", function()
 
 	devENV = setmetatable({}, {
 		__index = setmetatable({
-			client = table.copy(client),
-			commands = table.deepcopy(commands),
-			currency = table.copy(currency),
+			client = client,
+			commands = commands,
+			currency = currency,
 
-			discordia = table.copy(discordia),
+			discordia = discordia,
 
 			getDatabase = getDatabase,
 			getLuaEnv = getLuaEnv,
 
-			http = table.copy(http),
+			http = http,
 
 			imageHandler = imageHandler,
 
-			json = table.copy(json),
+			json = json,
 
 			log = log,
 
@@ -3961,6 +4021,8 @@ client:on("ready", function()
 			save = save,
 			sendError = sendError,
 			setPermissions = setPermissions,
+
+			tokens = tokens,
 
 			updateCurrency = updateCurrency
 		}, {
