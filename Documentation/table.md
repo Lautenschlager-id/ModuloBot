@@ -13,8 +13,8 @@
 >| Parameter | Type | Optional |
 >|-|-|:-:|
 >| list | table |  |
->| value | string|int|boolean |  |
->| index | string|int | ✔ |
+>| value | string\|int\|boolean |  |
+>| index | string\|int | ✔ |
 >| f | function | ✔ |
 >
 >Verifies if a certain value exists in a table and returns the index.

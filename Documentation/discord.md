@@ -8,7 +8,7 @@
 ### delete(msgId)
 >| Parameter | Type | Optional |
 >|-|-|:-:|
->| msgId | string|int |  |
+>| msgId | string\|int |  |
 >
 >Deletes a message sent by the bot.
 
@@ -18,14 +18,14 @@
 >| url | string |  |
 >| header | table | ✔ |
 >| body | string | ✔ |
->| token | string|table | ✔ |
+>| token | string\|table | ✔ |
 >
 >Performs a GET HTTP request.
 
 ### reply(text)
 >| Parameter | Type | Optional |
 >|-|-|:-:|
->| text | string|table |  |
+>| text | string\|table |  |
 >
 >Sends a message in the channel.
 >

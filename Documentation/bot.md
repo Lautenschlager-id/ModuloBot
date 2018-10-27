@@ -123,8 +123,8 @@
 ### ![admin_only](https://i.imgur.com/GWJg6TA.png)log(category, text, color)
 >| Parameter | Type | Optional |
 >|-|-|:-:|
->| category | string|number |  |
->| text | string|number |  |
+>| category | string\|number |  |
+>| text | string\|number |  |
 >| color | int |  |
 >
 >Sends a console log.
@@ -142,7 +142,7 @@
 >| Parameter | Type | Optional |
 >|-|-|:-:|
 >| fileName | string |  |
->| db | table|string |  |
+>| db | table\|string |  |
 >| append | boolean | ✔ |
 >
 >Saves a database.
