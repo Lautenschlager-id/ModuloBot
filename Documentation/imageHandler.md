@@ -1,7 +1,7 @@
 ![admin_only](https://i.imgur.com/GWJg6TA.png) **Admin-only fields/methods**
 ***
 ## Static Methods
-### ![admin_only](https://i.imgur.com/GWJg6TA.png)fromURL(url)
+### ![admin_only](https://i.imgur.com/GWJg6TA.png)fromUrl(url)
 >| Parameter | Type | Optional |
 >|-|-|:-:|
 >| url | `string` |  |
