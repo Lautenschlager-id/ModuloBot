@@ -3166,11 +3166,11 @@ commands["lua"] = {
 
 				if token then
 					if type(token) == "string" then
-						if (tokens[token] and string.match(url, "^" .. token_whitelist[token])) then
+						if (tokens[token] and string.find(url, "^" .. token_whitelist[token])) then
 							url = url .. tokens[token]
 						end
 					else
-						if (token[2] and tokens[token[2]] and string.match(url, "^" .. token_whitelist[2])) then
+						if (token[2] and tokens[token[2]] and string.find(url, "^" .. token_whitelist[2])) then
 							if not header then
 								header = { }
 							end
