@@ -164,7 +164,9 @@ local channels = {
 	["commu"] = "494667707510161418",
 	["image"] = "462279141551636500",
 	["map"] = "462279117866401792",
-	["bridge"] = "499635964503785533"
+	["bridge"] = "499635964503785533",
+	["bot2"] = "484182969926418434",
+	["flood"] = "465583146071490560"
 }
 --[[Doc
 	"Flags for the embed colors used in the bot."
@@ -886,6 +888,12 @@ local tokens = {
 	mashape = os.readFile("Content/mashape_token.txt", "*l"),
 	openweather = os.readFile("Content/openweathermap_token.txt", "*l")
 }
+local token_whitelist = {
+	miceclan = "http://miceclan%.com/",
+	fixer = "http://data%.fixer%.io/",
+	mashape = "https://.-%.p%.mashape%.com",
+	openweather = "http://api%.openweathermap%.org/"
+}
 
 --[[ System ]]--
 --[[Doc
@@ -1144,13 +1152,30 @@ local log = function(category, text, color)
 end
 
 local messageCreate = function(message, skipChannelActivity)
+	-- Ignore its own messages
+	if message.author.id == client.user.id then return end
+
+	-- Bridge system (Output)
+	if message.channel.id == channels["bridge"] and message.content then
+		local private_message = client:getUser(message.content):send({ embed = message.embed })
+		if not private_message then
+			local channel = client:getChannel(channels["flood"])
+			channel:send("Hi <@" .. message.content .. ">, to get your hosted image via Private Message, please allow members of this server to message you! To do so, follow these steps:\nRight-click the server, go in `Privacy Settings` (https://i.imgur.com/utxsBcH.png)\n\nEnable it! (https://i.imgur.com/mep2kIQ.png).\n\nThank you. ~<@" .. client.user.id .. ">")
+			channel:send({
+				content = "<@" .. message.content .. ">",
+				embed = message.embed
+			})
+		end
+		return message:delete()
+	end
+
 	-- Skips bot messages
 	if message.author.bot then return end
 
 	-- Doesn't allow private messages
 	if message.channel.type == 1 then return end
 
-	-- Bridge system
+	-- Bridge system (Input)
 	if message.channel.id == channels["map"] then
 		local lines, wrongPerm, counter = { }, { }, 0
 		for line in string.gmatch(message.content, "[^\n]+") do
@@ -1197,13 +1222,94 @@ local messageCreate = function(message, skipChannelActivity)
 				embed = {
 					color = color.err,
 					title = "#map-perm",
-					description = "Some categories you requested are unavailable. The available categories are: **P" .. concat(permMaps, "** - **P", tostring) .. "**\nConsider try sending the following maps again: `" .. table.concat(wrongPerm, "`, `") .. "`"
+					description = "Some categories you requested are unavailable. The available categories are: **P" .. concat(permMaps, "** - **P", tostring) .. "**\nConsider fixing the categories of the following maps: `" .. table.concat(wrongPerm, "`, `") .. "`"
 				}
 			})
 		end
 
 		if #wrongPerm < (counter - 1) then
 			message:addReaction("p41:463508055577985024")
+		end
+		return
+	elseif message.channel.id == channels["image"] then
+		local iniSettings, _, __, settings = string.find(message.content, "`(`?`?)\n?(.-)%1`$")
+
+		local content = string.sub(message.content, 1, (iniSettings or 0) - 1)
+		local img = (message.attachment and message.attachment.url or nil)
+		if img then
+			content = content .. "\n" .. img
+		end
+
+		if not string.find(content, "https?://") then
+			message.author:send({
+				embed = {
+					color = color.err,
+					title = "#image-host",
+					description = "Wrong image submissions format. Use:\n\nurl\nurl\n..." .. (settings and "\n\\`\\`\\`\nSettings\n\\`\\`\\`" or "")
+				}
+			})
+			return message:delete()
+		end
+
+		local wrongLinks, counter = { }, 0
+
+		for line in string.gmatch(content, "[^\n]+") do
+			local success = pcall(http.request, "GET", line)
+			if not success then
+				counter = counter + 1
+				wrongLinks[counter] = line
+			end
+		end
+
+		counter = 0
+		local missingParameters, wrongSettings = { }, { }, { }, { }
+		if settings then
+			string.gsub(settings, "[^\n]+", function(setting)
+				local setting_wo_param = string.match(setting, "^%S+") or setting
+				if imageHandler.methodFlags[setting_wo_param] then
+					if imageHandler.methodFlags[setting_wo_param] == 1 and not string.find(setting, " .") then
+						missingParameters[#missingParameters + 1] = setting_wo_param
+					end
+				else
+					wrongSettings[#wrongSettings + 1] = setting_wo_param
+				end
+			end)
+		end
+
+		local can = true
+		if #wrongLinks > 0 then
+			can = false
+			message.author:send({
+				embed = {
+					color = color.err,
+					title = "#image-host",
+					description = "Some links you sent are invalid.\nConsider fixing them: <" .. table.concat(wrongLinks, ">\n<") .. ">"
+				}
+			})
+		end
+		if #missingParameters > 0 then
+			can = false
+			message.author:send({
+				embed = {
+					color = color.err,
+					title = "#image-host",
+					description = "Some image settings you requested are missing parameters.\nConsider adding parameters in the following settings: `" .. table.concat(missingParameters, "`, `") .. "`"
+				}
+			})
+		end
+		if #wrongSettings > 0 then
+			can = false
+			message.author:send({
+				embed = {
+					color = color.err,
+					title = "#image-host",
+					description = "Some image settings you requested are unavailable. The available settings are: **" .. concat(imageHandler.methodFlags, "** - **", tostring) .. "**\nConsider removing them: `" .. table.concat(wrongSettings, "`, `") .. "`"
+				}
+			})
+		end
+
+		if can then
+			message:addReaction("\xF0\x9F\x93\xB7")
 		end
 		return
 	end
@@ -1250,7 +1356,7 @@ local messageCreate = function(message, skipChannelActivity)
 				memberTimers[message.author.id] = 0
 			end
 			if os.time() > memberTimers[message.author.id] then
-				memberTimers[message.author.id] = os.time() + 5
+				memberTimers[message.author.id] = os.time() + 3
 				if not activeMembers[message.author.id] then
 					activeMembers[message.author.id] = 1
 				else
@@ -1444,6 +1550,11 @@ local reactionAdd = function(cached, channel, messageId, hash, userId)
 		local member = message.channel.guild:getMember(userId)
 
 		if hasPermission(permissions.is_module, member) then
+			--@MoonBot
+			if client:getChannel(channels["bridge"]).guild:getMember(channels["bot2"]).status == "offline" then
+				return message:removeReaction(hash, userId)
+			end
+
 			local maps = { }
 			for line in string.gmatch(message.content, "[^\n]+") do
 				local cat, code = string.match(line, "^[Pp](%d+) *%- *(@%d+)$")
@@ -1464,10 +1575,64 @@ local reactionAdd = function(cached, channel, messageId, hash, userId)
 
 			message:delete()
 			for k, v in next, maps do
-				client:getChannel(channels["bridge"]):send("%p" .. k .. " " .. table.concat(v, " "))
+				client:getChannel(channels["bridge"]):send("%p" .. k .. " " .. table.concat(v, ' '))
 			end
 		end
-	elseif not cached then
+	elseif channel.id == channels["image"] then
+		--@MoonBot
+		if client:getChannel(channels["bridge"]).guild:getMember(channels["bot2"]).status == "offline" then
+			return message:removeReaction(hash, userId)
+		end
+
+		local member = message.channel.guild:getMember(userId)
+
+		if hasPermission(permissions.is_module, member) then
+			local iniSettings, _, __, settings = string.find(message.content, "`(`?`?)\n?(.-)%1`$")
+
+			local content = string.sub(message.content, 1, (iniSettings or 0) - 1)
+			local img = (message.attachment and message.attachment.url or nil)
+			if img then
+				img = imageHandler.fromUrl(img)
+			end
+
+			message:delete()
+			if settings then
+				local s = { }
+				string.gsub(settings, "[^\n]+", function(setting)
+					local setting_wo_param = string.match(setting, "^%S+") or setting
+					s[setting_wo_param] = imageHandler.methodFlags[setting_wo_param] == 0 and "" or string.match(setting, " (.-)$")
+				end)
+
+				local images = { img }
+				for link in string.gmatch(content, "[^\n]+") do
+					images[#images + 1] = imageHandler.fromUrl(link)
+				end
+
+				for i = 1, #images do
+					for setting, param in next, s do
+						images[i][setting](images[i], param)
+					end
+					images[i]:apply()
+
+					client:getChannel(channels["bridge"]):send({
+						content = "!upload `" .. userId .. "|" .. message.author.id .. "`",
+						file = tostring(images[i])
+					})
+				end
+			else
+				local cmd = "!upload `" .. userId .. "|" .. message.author.id .. "` "
+				for link in string.gmatch(content, "[^\n]+") do
+					client:getChannel(channels["bridge"]):send(cmd .. link)
+				end
+				if img then
+					client:getChannel(channels["bridge"]):send({
+						content = cmd,
+						file = tostring(img)
+					})
+				end
+			end
+		end
+	elseif not cached then -- in last because the above ^ can be uncached too
 		if polls[messageId] then
 			local found, answer = table.find(polls.__REACTIONS, hash)
 			if found then
@@ -2153,17 +2318,17 @@ commands["doc"] = {
 						return "```LUA¨" .. (string.gsub(string.gsub(code, "\n", "¨"), "¨     ", "¨")) .. "```"
 					end)
 
-					description = string.gsub(description, "&sect;", "§")
-					description = string.gsub(description, "&middot;", ".")
-					description = string.gsub(description, "&nbsp;", " ")
-					description = string.gsub(description, "&gt;", ">")
-					description = string.gsub(description, "&lt;", "<")
-					description = string.gsub(description, "&pi;", "π")
+					description = string.gsub(description, "&sect;", '§')
+					description = string.gsub(description, "&middot;", '.')
+					description = string.gsub(description, "&nbsp;", ' ')
+					description = string.gsub(description, "&gt;", '>')
+					description = string.gsub(description, "&lt;", '<')
+					description = string.gsub(description, "&pi;", 'π')
 
 					description = string.gsub(description, "<a href=\"(#.-)\">(.-)</a>", "[%2](https://www.lua.org/manual/5.2/manual.html%1)")
 
-					description = string.gsub(description, "\n", " ")
-					description = string.gsub(description, "¨", "\n")
+					description = string.gsub(description, "\n", ' ')
+					description = string.gsub(description, "¨", '\n')
 					description = string.gsub(description, "<p>", "\n\n")
 
 					description = string.gsub(description, "<(.-)>(.-)</%1>", "%2")
@@ -2292,7 +2457,7 @@ commands["list"] = {
 
 		if parameters and #parameters > 0 then
 			local numP = tonumber(parameters)
-			parameters = numP and tostring(roleFlags[numP]) or string.lower(string.gsub(parameters, "%s+", " "))
+			parameters = numP and tostring(roleFlags[numP]) or string.lower(string.gsub(parameters, "%s+", ' '))
 
 			local role = message.guild.roles:find(function(role)
 				return string.lower(role.name) == parameters
@@ -2305,7 +2470,7 @@ commands["list"] = {
 
 			local members = { }
 			for member in message.guild.members:findAll(function(member) return member:hasRole(role.id) end) do
-				members[#members + 1] = member.name
+				members[#members + 1] = "<@" .. member.id .. "> " .. member.name
 			end
 
 			toDelete[message.id] = message:reply({
@@ -2462,14 +2627,14 @@ commands["quote"] = {
 							fields = {
 								{
 									name = "Link",
-									value = "[Click here](https://discordapp.com/channels/" .. msg.guild.id .. "/" .. msg.channel.id .. "/" .. msg.id .. ")"
+									value = "[Click here](" .. msg.link .. ")"
 								}
 							},
 
 							footer = {
 								text = "In " .. (msg.channel.category and (msg.channel.category.name .. ".#") or "#") .. msg.channel.name,
 							},
-							timestamp = string.gsub(msg.timestamp, " ", ""),
+							timestamp = string.gsub(msg.timestamp, ' ', ''),
 						}
 
 						local img = (msg.attachment and msg.attachment.url) or (msg.embed and msg.embed.image and msg.embed.image.url)
@@ -3001,11 +3166,11 @@ commands["lua"] = {
 
 				if token then
 					if type(token) == "string" then
-						if (tokens[token] and string.find(url, token)) then
+						if (tokens[token] and string.match(url, "^" .. token_whitelist[token])) then
 							url = url .. tokens[token]
 						end
 					else
-						if (token[2] and tokens[token[2]] and string.find(url, token[2])) then
+						if (token[2] and tokens[token[2]] and string.match(url, "^" .. token_whitelist[2])) then
 							if not header then
 								header = { }
 							end
@@ -3084,7 +3249,7 @@ commands["lua"] = {
 			]]
 			ENV.print = function(...)
 				local r = printf(...)
-				dataLines[#dataLines + 1] = r == '' and " " or r
+				dataLines[#dataLines + 1] = r == '' and ' ' or r
 			end
 			if hasAuth then
 				--[[Doc
