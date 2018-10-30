@@ -26,6 +26,7 @@
 | globalCommands | table | The global commands made by users in the server. |
 | activeChannels | table | The channel activity control. |
 | activeMembers | table | The member activity control. |
+| staffMembers | table | The profile data of the staff members in the server. |
 | ![admin_only](https://i.imgur.com/GWJg6TA.png)currency | table | Flags of the country currency codes used in the command **!coin**. |
 ## Static Methods
 ### concat(tbl, sep, f, i, j, iter)
@@ -70,6 +71,22 @@
 >
 >**Returns:** `string`
 
+### ![admin_only](https://i.imgur.com/GWJg6TA.png)generateStaffMember(member)
+>| Parameter | Type | Optional |
+>|-|-|:-:|
+>| member | `Discordia.Guild.Member` |  |
+>
+>Generates a new member in the staffMembers data table
+
+### getAge(date)
+>| Parameter | Type | Optional |
+>|-|-|:-:|
+>| date | `string` |  |
+>
+>Returns the years between the current date and another date.
+>
+>**Returns:** `int`
+
 ### getCommandFormat(str)
 >| Parameter | Type | Optional |
 >|-|-|:-:|
@@ -113,7 +130,7 @@
 >| Parameter | Type | Optional |
 >|-|-|:-:|
 >| permission | `int` |  |
->| member | `Discordia.Member` |  |
+>| member | `Discordia.Guild.Member` |  |
 >| message | `Discordia.Message` | ✔ |
 >
 >Verifies if an user has permission over a specific permission flag.
