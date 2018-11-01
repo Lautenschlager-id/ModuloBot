@@ -15,78 +15,7 @@ local http = require("coro-http")
 local json = require("json")
 local timer = require("timer")
 
-local base64 = { encode = true, decode = true }
-do
-	local chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-	--[[Doc
-		"Encodes a string in Base64."
-		@code string
-		>string
-	]]
-	base64.encode = function(code)
-		if not code then return end
-		code = string.gsub(code, "\r\n", "\n")
-
-		return (string.gsub((string.gsub(code, '.', function(x)
-			local r, b = '', string.byte(x)
-
-			for i = 8, 1, -1 do
-				r = r .. (b%2^i - b%2^(i-1) > 0 and '1' or '0')
-			end
-
-			return r
-		end) .. '0000'), '%d%d%d?%d?%d?%d?', function(x)
-			if (#x < 6) then
-				return ''
-			end
-
-			local c = 0
-
-			for i = 1, 6 do
-				c = c + (string.sub(x, i,i)=='1' and 2^(6-i) or 0)
-			end
-
-			return string.sub(chars, c+1, c+1)
-		end) .. ({'', '==', '='})[#code%3 + 1])
-	end
-	--[[Doc
-		"Decodes a Base64-crypted string."
-		@code string
-		>string
-	]]
-	base64.decode = function(code)
-		if not code then return end
-
-		code = string.gsub(code, "[^" .. chars .. "=]", '')
-
-		return (string.gsub(string.gsub(code, '.', function(x)
-			if (x == '=') then
-				return ''
-			end
-
-			local r, f = '', (string.find(chars, x) - 1)
-
-			for i = 6, 1, -1 do
-				r = r .. (f%2^i - f%2^(i-1) > 0 and '1' or '0')
-			end
-
-			return r
-		end), '%d%d%d?%d?%d?%d?%d?%d?', function(x)
-			if (#x ~= 8) then
-				return ''
-			end
-
-			local c = 0
-
-			for i = 1, 8 do
-				c = c + (string.sub(x, i, i) == '1' and 2^(8-i) or 0)
-			end
-
-			return string.char(c)
-		end))
-	end
-end
-
+local base64 = require("Content/base64")
 local binBase64 = require("Content/binBase64")
 local imageHandler = require("Content/imageHandler")
 
@@ -956,7 +885,7 @@ local activeMembers = {}
 local memberTimers = {}
 --[[Doc
 	"The profile data of the staff members in the server."
-	"table
+	!table
 ]]
 local staffMembers = {}
 --[[
@@ -1011,6 +940,11 @@ do
 			index = 3,
 			type = "string",
 			min = 3,
+			valid = function(x)
+				return (discord.http("https://www.deviantart.com/" .. x, {
+					{ "user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36" }
+				})).reason == "OK"
+			end,
 			description = "The name of your DeviantArt account."
 		},
 		perms = {
@@ -1025,7 +959,7 @@ do
 			type = "number",
 			min = 0,
 			max = 200,
-			description = "The approximate amount of modules and Lua projects you have helped to translated."
+			description = "The approximate amount of modules and Lua projects you have helped to translate."
 		},
 		evt = {
 			index = 7,
@@ -1286,12 +1220,15 @@ local messageCreate = function(message, skipChannelActivity)
 
 	-- Bridge system (Output)
 	if message.channel.id == channels["bridge"] and message.content then
-		local private_message = client:getUser(message.content):send({ embed = message.embed })
+		local user, member = string.match(message.content, "(%d+)|(%d+)")
+		local by = "Hosted by **" .. client:getUser(member).fullname .. "**"
+
+		local private_message = client:getUser(user):send({ content = by, embed = message.embed })
 		if not private_message then
 			local channel = client:getChannel(channels["flood"])
-			channel:send("Hi <@" .. message.content .. ">, to get your hosted image via Private Message, please allow members of this server to message you! To do so, follow these steps:\nRight-click the server, go in `Privacy Settings` (https://i.imgur.com/utxsBcH.png)\n\nEnable it! (https://i.imgur.com/mep2kIQ.png).\n\nThank you. ~<@" .. client.user.id .. ">")
+			channel:send("Hi <@" .. user .. ">, to get your hosted image via Private Message, please allow members of this server to message you! To do so, follow these steps:\nRight-click the server, go in `Privacy Settings` (https://i.imgur.com/utxsBcH.png)\n\nEnable it! (https://i.imgur.com/mep2kIQ.png).\n\nThank you. ~<@" .. client.user.id .. ">")
 			channel:send({
-				content = "<@" .. message.content .. ">",
+				content = "<@" .. user .. ">\n" .. by,
 				embed = message.embed
 			})
 		end
@@ -1620,6 +1557,12 @@ local messageDelete = function(message, skipChannelActivity)
 			end
 		end
 	end
+end
+local messageUpdate = function(message)
+	if message.channel.id == channels["bridge"] then return end
+
+	messageDelete(message, true)
+	messageCreate(message, true)
 end
 
 local normalizeDiscriminator
@@ -2169,7 +2112,7 @@ commands["a801"] = {
 				sendError(message, "A801", "Fatal error")
 			end
 		else
-			sendError(message, "A801", "Missing or invalid parameters.", "Use `!a801 player_name`.")
+			sendError(message, "A801", "Invalid or missing parameters.", "Use `!a801 player_name`.")
 		end
 	end
 }
@@ -2298,7 +2241,7 @@ commands["adoc"] = {
 				sendError(message, "ADOC", "Fatal error")
 			end
 		else
-			sendError(message, "ADOC", "Missing or invalid parameters.", "Use `!adoc function_name`.")
+			sendError(message, "ADOC", "Invalid or missing parameters.", "Use `!adoc function_name`.")
 		end
 	end
 }
@@ -2367,7 +2310,7 @@ commands["coin"] = {
 					}
 				})
 			else
-				sendError(message, "COIN", "Missing or invalid parameters.", syntax)
+				sendError(message, "COIN", "Invalid or missing parameters.", syntax)
 			end
 		else
 			sendError(message, "COIN", "Currency table is loading. Try again later.")
@@ -2423,7 +2366,7 @@ commands["color"] = {
 				}
 			})
 		else
-			sendError(message, "COLOR", "Missing or invalid parameters.", "Use `!color #hex_code` or `!color rgb(r, g, b)`.")
+			sendError(message, "COLOR", "Invalid or missing parameters.", "Use `!color #hex_code` or `!color rgb(r, g, b)`.")
 		end
 	end
 }
@@ -2494,7 +2437,7 @@ commands["doc"] = {
 				sendError(message, "DOC", "Fatal error")
 			end
 		else
-			sendError(message, "DOC", "Missing or invalid parameters.", "Use `!doc function_name`.")
+			sendError(message, "DOC", "Invalid or missing parameters.", "Use `!doc function_name`.")
 		end
 	end
 }
@@ -2626,7 +2569,7 @@ commands["list"] = {
 				}
 			})
 		else
-			sendError(message, "LIST", "Missing or invalid parameters.", syntax)
+			sendError(message, "LIST", "Invalid or missing parameters.", syntax)
 		end
 	end
 }
@@ -2821,7 +2764,7 @@ commands["profile"] = {
 			icon = icon .. "<:p5:468937377981923339> "
 			if p.data[3] and table.count(p.data[3]) > 0 then
 				fields[#fields + 1] = p.data[3].deviantart and {
-					name = "<:deviantart:506475600416866324> Deviantart",
+					name = "<:deviantart:506475600416866324> DeviantArt",
 					value = "[" .. p.data[3].deviantart .. "](https://www.deviantart.com/" .. p.data[3].deviantart .. ")",
 					inline = true
 				} or nil
@@ -2880,11 +2823,13 @@ commands["profile"] = {
 				local cachedMembers, loggedMemberMessages = sortActivityTable(activeMembers, function(id) return not message.guild:getMember(id) end)
 				local _, o = table.find(cachedMembers, p.discord.id, 1)
 
-				fields[#fields + 1] = {
-					name = (o > 3 and ":medal: " or ":" .. (o == 1 and "first" or o == 2 and "second" or "third") .. "_place: ") .. "Activity" .. (o > 3 and " [#" .. o .. "]" or ""),
-					value = getRate(cachedMembers[o][2], loggedMemberMessages, 10) .. " [" .. cachedMembers[o][2] .. "]",
-					inline = true
-				}
+				if o then
+					fields[#fields + 1] = {
+						name = (o > 3 and ":medal: " or ":" .. (o == 1 and "first" or o == 2 and "second" or "third") .. "_place: ") .. "Activity" .. (o > 3 and " [#" .. o .. "]" or ""),
+						value = getRate(cachedMembers[o][2], loggedMemberMessages, 10) .. " [" .. cachedMembers[o][2] .. "]",
+						inline = true
+					}
+				end
 			end
 		end
 
@@ -2952,7 +2897,7 @@ commands["quote"] = {
 				end
 			end
 		else
-			sendError(message, "QUOTE", "Missing or invalid parameters.", "Use `!quote [channel_id-]message_id`.")
+			sendError(message, "QUOTE", "Invalid or missing parameters.", "Use `!quote [channel_id-]message_id`.")
 		end
 	end
 }
@@ -3283,7 +3228,7 @@ commands["poll"] = {
 
 			message:delete()
 		else
-			sendError(message, "POLL", "Missing or invalid parameters.", "Use `!poll question` or `!poll ```question``` poll_time` ` `poll_option_1` ` ` ` ` `poll_option_2` ` ` `.")
+			sendError(message, "POLL", "Invalid or missing parameters.", "Use `!poll question` or `!poll ```question``` poll_time` ` `poll_option_1` ` ` ` ` `poll_option_2` ` ` `.")
 		end
 	end
 }
@@ -3336,7 +3281,7 @@ commands["remind"] = {
 				message:delete()
 			end
 		else
-			sendError(message, "REMIND", "Missing or invalid parameters.", "Use `!remind time_and_order text`.")
+			sendError(message, "REMIND", "Invalid or missing parameters.", "Use `!remind time_and_order text`.")
 		end
 	end
 }
@@ -3423,7 +3368,7 @@ commands["xml"] = {
 				sendError(message, "XML", "Invalid xml.")
 			end
 		else
-			sendError(message, "XML", "Missing or invalid parameters.", "Use `!xml ``` XML ``` ` or `!xml pastebin_link`.")
+			sendError(message, "XML", "Invalid or missing parameters.", "Use `!xml ``` XML ``` ` or `!xml pastebin_link`.")
 		end
 	end,
 }
@@ -3431,9 +3376,7 @@ commands["xml"] = {
 commands["cmd"] = {
 	auth = permissions.is_staff,
 	description = "Creates a command for the #module category.",
-	f = function(message, parameters)
-		local category = message.channel.category and string.lower(message.channel.category.name) or nil
-
+	f = function(message, parameters, category)
 		if not (category and string.sub(category, 1, 1) == "#") then
 			sendError(message, "CMD", "This command cannot be used in this category.")
 			return
@@ -3484,7 +3427,84 @@ commands["cmd"] = {
 				sendError(message, "CMD", "Invalid syntax.", syntax)
 			end
 		else
-			sendError(message, "CMD", "Missing or invalid parameters.", syntax)
+			sendError(message, "CMD", "Invalid or missing parameters.", syntax)
+		end
+	end
+}
+	-- Event Manager
+commands["evt"] = {
+	auth = permissions.is_evt,
+	description = "Creates a new channel to discuss about the event project. [- means delete]",
+	f = function(message, parameters, category)
+		if not category or not string.find(category, "event") then
+			return sendError(message, "EVT", "This command cannot be used in this category.")
+		end
+
+		local syntax = "Use `!evt event_name(4+ characters) @member @member ...` or `!evt @member @member ...` or `!evt - [@member ...]`."
+
+		if parameters and #parameters > 0 then
+			local p = string.split(parameters, "[^\n ]+")
+
+			if p[1] then
+				local del = p[1] == '-'
+				local addUser = string.find(p[1], "^<") and 1 or 2
+
+				local members, counter = { }, 0
+				if p[addUser] then
+					for i = addUser, #p do
+						local member = string.match(p[i], "<@!?(%d+)>")
+						if member then
+							counter = counter + 1
+							members[counter] = message.guild:getMember(member)
+						else
+							return sendError(message, "EVT", "Invalid parameter.", "`" .. tostring(p[i]) .. "` is not a member.")
+						end
+					end
+				end
+				if counter == 0 and not (del and not p[2]) then
+					return sendError(message, "EVT", "Missing parameters.", "Missing member names.")
+				end
+
+				if del or addUser == 1 then
+					if not string.find(string.lower(message.channel.name), "^evt_") then
+						return sendError(message, "EVT", "This command cannot be used in this channel.")
+					end
+
+					if del then
+						if p[2] then -- Del user(s)
+							for member = 1, counter do
+								message.channel:getPermissionOverwriteFor(members[member]):delete()
+							end
+						else -- Del channel
+							message.channel:delete()
+						end
+					else -- Add user(s)
+						for member = 1, counter do
+							message.channel:getPermissionOverwriteFor(members[member]):allowPermissions(table.unpack(permissionOverwrites.module.everyone.denied))
+						end
+					end
+				else
+					if #p[1] < 4 then
+						return sendError(message, "EVT", "Invalid event name.", "An event name must have 4 characters or more.")
+					end
+
+					local channel = message.guild:createTextChannel("evt_" .. p[1])
+					channel:setCategory(message.channel.category.id)
+
+					-- Can't read
+					channel:getPermissionOverwriteFor(message.guild.defaultRole):denyPermissions(table.unpack(permissionOverwrites.module.everyone.denied))
+
+					for member = 1, counter do
+						-- Can read
+						channel:getPermissionOverwriteFor(members[member]):allowPermissions(table.unpack(permissionOverwrites.module.everyone.denied))
+					end
+					message:delete()
+				end
+			else
+				sendError(message, "EVT", "Missing parameters.", syntax)
+			end
+		else
+			sendError(message, "EVT", "Invalid or missing parameters.", syntax)
 		end
 	end
 }
@@ -3743,7 +3763,7 @@ commands["lua"] = {
 				end
 			end
 		else
-			sendError(message, message.member.name .. ".LUA", "Missing or invalid parameters.", syntax)
+			sendError(message, message.member.name .. ".LUA", "Invalid or missing parameters.", syntax)
 		end
 	end
 }
@@ -3780,7 +3800,7 @@ commands["delcmd"] = {
 				sendError(message, "DELCMD", "Invalid syntax.", syntax)
 			end
 		else
-			sendError(message, "DELCMD", "Missing or invalid parameters.", syntax)
+			sendError(message, "DELCMD", "Invalid or missing parameters.", syntax)
 		end
 	end
 }
@@ -3805,7 +3825,7 @@ commands["prefix"] = {
 
 			message:delete()
 		else
-			sendError(message, "PREFIX", "Missing or invalid parameters.", syntax)
+			sendError(message, "PREFIX", "Invalid or missing parameters.", syntax)
 		end
 	end
 }
@@ -3912,7 +3932,7 @@ commands["public"] = {
 			if edition then
 				sendError(message, "PUBLIC", "The module '" .. category .. "' has already a public channel.")
 			else
-				sendError(message, "PUBLIC", "Missing or invalid parameters.", syntax)
+				sendError(message, "PUBLIC", "Invalid or missing parameters.", syntax)
 			end
 		end
 	end
@@ -3972,7 +3992,7 @@ commands["staff"] = {
 				sendError(message, "STAFF", "Invalid syntax, user or member.", syntax)
 			end
 		else
-			sendError(message, "STAFF", "Missing or invalid parameters.", syntax)
+			sendError(message, "STAFF", "Invalid or missing parameters.", syntax)
 		end
 	end
 }
@@ -4009,7 +4029,7 @@ commands["delgcmd"] = {
 				sendError(message, "DELGCMD", "Invalid syntax.", syntax)
 			end
 		else
-			sendError(message, "DELGCMD", "Missing or invalid parameters.", syntax)
+			sendError(message, "DELGCMD", "Invalid or missing parameters.", syntax)
 		end
 	end
 }
@@ -4054,10 +4074,10 @@ commands["emoji"] = {
 					sendError(message, "EMOJI", "Invalid image or internal error.", "Try again later.")
 				end
 			else
-				sendError(message, "EMOJI", "Missing or invalid image attachment.")
+				sendError(message, "EMOJI", "Invalid or missing image attachment.")
 			end
 		else
-			sendError(message, "EMOJI", "Missing or invalid parameters.", "Use `!emoji name` attached to an image.")
+			sendError(message, "EMOJI", "Invalid or missing parameters.", "Use `!emoji name` attached to an image.")
 		end
 	end
 }
@@ -4133,7 +4153,7 @@ commands["gcmd"] = {
 				sendError(message, "GCMD", "Invalid syntax.", syntax)
 			end
 		else
-			sendError(message, "GCMD", "Missing or invalid parameters.", syntax)
+			sendError(message, "GCMD", "Invalid or missing parameters.", syntax)
 		end
 	end
 }
@@ -4228,7 +4248,7 @@ commands["module"] = {
 				sendError(message, "MODULE", "Invalid syntax.", syntax)
 			end
 		else
-			sendError(message, "MODULE", "Missing or invalid parameters.", syntax)
+			sendError(message, "MODULE", "Invalid or missing parameters.", syntax)
 		end
 	end
 }
@@ -4297,7 +4317,7 @@ commands["set"] = {
 			end
 			return
 		end
-		sendError(message, "SET", "Missing or invalid parameters.", syntax)
+		sendError(message, "SET", "Invalid or missing parameters.", syntax)
 	end
 }
 	-- Freeaccess
@@ -4404,7 +4424,7 @@ commands["commu"] = {
 				sendError(message, "COMMU", "The community '" .. parameters .. "' already exists.")
 			end
 		else
-			sendError(message, "COMMU", "Missing or invalid parameters.", syntax)
+			sendError(message, "COMMU", "Invalid or missing parameters.", syntax)
 		end
 	end
 }
@@ -4426,7 +4446,7 @@ commands["del"] = {
 				sendError(message, "DEL", "Message id not found.", syntax)
 			end
 		else
-			sendError(message, "DEL", "Missing or invalid parameters.", syntax)
+			sendError(message, "DEL", "Invalid or missing parameters.", syntax)
 		end
 	end
 }
@@ -4529,7 +4549,7 @@ commands["remmodule"] = {
 				sendError(message, "REMMODULE", "Invalid syntax.", syntax)
 			end
 		else
-			sendError(message, "REMMODULE", "Missing or invalid parameters.", syntax)
+			sendError(message, "REMMODULE", "Invalid or missing parameters.", syntax)
 		end
 	end
 }
@@ -4639,8 +4659,16 @@ end)
 client:on("messageUpdate", function(message)
 	if not modules then return end
 
-	messageDelete(message, true)
-	messageCreate(message, true)
+	local success, err = pcall(messageUpdate, message)
+	if not success then
+		toDelete[message.id] = message:reply({
+			embed = {
+				color = color.lua_err,
+				title = "evt@MessageUpdate => Fatal Error!",
+				description = "```\n" .. err .. "```"
+			}
+		})
+	end
 end)
 client:on("messageDelete", function(message)
 	local success, err = pcall(messageDelete, message)
@@ -4662,6 +4690,10 @@ client:on("memberLeave", function(member)
 	client:getChannel(channels["logs"]):send("<@" .. member.id .. "> [" .. member.name .. "] just left!")
 	if activeMembers[member.id] then
 		activeMembers[member.id] = nil
+	end
+	if staffMembers[member.id] then
+		staffMembers[member.id] = nil
+		save("b_memberprofiles", staffMembers)
 	end
 end)
 
