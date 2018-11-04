@@ -28,6 +28,7 @@
 | activeMembers | table | The member activity control. |
 | staffMembers | table | The profile data of the staff members in the server. |
 | ![admin_only](https://i.imgur.com/GWJg6TA.png)currency | table | Flags of the country currency codes used in the command **!coin**. |
+| ![admin_only](https://i.imgur.com/GWJg6TA.png)boundaries | table | Modulo form-data request boundaries |
 ## Static Methods
 ### concat(tbl, sep, f, i, j, iter)
 >| Parameter | Type | Optional |
@@ -53,15 +54,6 @@
 >
 >**Returns:** `function` | `nil`
 
-### removeAccents(str)
->| Parameter | Type | Optional |
->|-|-|:-:|
->| str | `string` |  |
->
->Removes the accents in the string
->
->**Returns:** `stirng`
-
 ### encodeUrl(url)
 >| Parameter | Type | Optional |
 >|-|-|:-:|
@@ -70,13 +62,6 @@
 >Encodes a string in the HTML format. Escapes all the characters.
 >
 >**Returns:** `string`
-
-### ![admin_only](https://i.imgur.com/GWJg6TA.png)generateStaffMember(member)
->| Parameter | Type | Optional |
->|-|-|:-:|
->| member | `Discordia.Guild.Member` |  |
->
->Generates a new member in the staffMembers data table
 
 ### getAge(date)
 >| Parameter | Type | Optional |
@@ -154,6 +139,15 @@
 >Normalizes a Transformice's nickname's discriminator, removing the `#0000` and highlighting `#xxxx`.
 >
 >**Returns:** `string`
+
+### removeAccents(str)
+>| Parameter | Type | Optional |
+>|-|-|:-:|
+>| str | `string` |  |
+>
+>Removes the accents in the string
+>
+>**Returns:** `stirng`
 
 ### ![admin_only](https://i.imgur.com/GWJg6TA.png)save(fileName, db, append)
 >| Parameter | Type | Optional |
