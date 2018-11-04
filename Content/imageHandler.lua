@@ -1,7 +1,17 @@
-local imageHandler = { }
+local imageHandler = {
+	methodFlags = {
+	
+	}
+}
 local meta = {
-	__name = "image",
-	__index = { }
+	__index = { },
+	__tostring = function(self)
+		return self._path
+	end,
+	__gc = function(self)
+		return os.remove(self._path)
+	end,
+	fromAlbum = false
 }
 local ImageMethods = meta.__index
 
@@ -11,17 +21,13 @@ local ImageMethods = meta.__index
 	@url string
 	>Image
 ]]
-imageHandler.fromURL = function(url)
-	local path = os.tmpname()
+imageHandler.fromUrl = function(url)
+	local path = os.tmpname() .. (string.find(url, ".jpe?g") and ".jpg" or ".png")
 	local img = { _path = path, _flags = { } }
 
-	os.execute(string.format("curl %q -o %s", url, path))
+	os.execute(string.format("curl -s %q -o %s", url, path))
 
 	return setmetatable(img, meta)
-end
-
-meta.__gc = function(self)
-	return os.remove(self._path)
 end
 
 local addFlag = function(self, flag, param)
@@ -30,6 +36,7 @@ local addFlag = function(self, flag, param)
 end
 
 local addMethod = function(name, flag, hasParam)
+	imageHandler.methodFlags[name] = hasParam and 1 or 0
 	ImageMethods[name] = function(self, param)
 		if hasParam and not param then
 			return self, "'" .. tostring(name) .. "' missing parameter."
@@ -38,14 +45,10 @@ local addMethod = function(name, flag, hasParam)
 	end
 end
 
-addMethod("antialias", "-antialias")
-addMethod("bgcolor", "-background", true)
-addMethod("border", "-border", true)
 addMethod("hflip", "-flop")
 addMethod("negative", "-negate")
 addMethod("resize", "-resize", true)
 addMethod("rotate", "-rotate", true)
-addMethod("scale", "-scale", true)
 addMethod("vflip", "-flip")
 
 --[[Doc
