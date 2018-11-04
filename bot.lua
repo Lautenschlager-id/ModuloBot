@@ -817,13 +817,15 @@ local tokens = {
 	miceclan = os.readFile("Content/db_token.txt", "*l"),
 	fixer = os.readFile("Content/fixer_token.txt", "*l"),
 	mashape = os.readFile("Content/mashape_token.txt", "*l"),
-	openweather = os.readFile("Content/openweathermap_token.txt", "*l")
+	openweather = os.readFile("Content/openweathermap_token.txt", "*l"),
+	imgur = os.readFile("Content/imgur_token.txt", "*l"),
 }
 local token_whitelist = {
 	miceclan = "http://miceclan%.com/",
 	fixer = "http://data%.fixer%.io/",
 	mashape = "https://.-%.p%.mashape%.com",
-	openweather = "http://api%.openweathermap%.org/"
+	openweather = "http://api%.openweathermap%.org/",
+	imgur = "https://i?%.?imgur.com/"
 }
 
 --[[ System ]]--
@@ -932,7 +934,7 @@ do
 			type = "string",
 			min = 3,
 			valid = function(x)
-				return (http.request("GET", "https://github.com/" .. x)).reason == "OK"
+				return string.find(x, "^[%w%-]+$") and (http.request("GET", "https://github.com/" .. x)).reason == "OK"
 			end,
 			description = "The name of your GitHub account."
 		},
@@ -941,7 +943,7 @@ do
 			type = "string",
 			min = 3,
 			valid = function(x)
-				return (discord.http("https://www.deviantart.com/" .. x, {
+				return string.find(x, "^[%w%-]+$") and (http.request("GET", "https://www.deviantart.com/" .. x, {
 					{ "user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36" }
 				})).reason == "OK"
 			end,
@@ -966,7 +968,7 @@ do
 			type = "number",
 			min = 0,
 			max = 20,
-			description = "The quantity of Lua Events you have developer or participated significantly."
+			description = "The quantity of Lua Events you have developed or participated significantly."
 		},
 		status = {
 			type = "string",
@@ -979,6 +981,28 @@ do
 			min = 0,
 			max = 1,
 			description = "Your gender (0 = Male, 1 = Female)."
+		},
+		nickname = {
+			type = "string",
+			min = 3,
+			max = 25,
+			valid = function(x)
+				x = string.gsub(string.lower(x), "%a", string.upper, 1)
+
+				local pattern = "^[%+%a][%w_]+#%d%d%d%d$"
+				if not string.find(x, '#') then
+					x = x .. "#0000"
+				end
+
+				for k, v in next, staffMembers do
+					if v.nickname == x then
+						return false
+					end
+				end
+
+				return string.find(x, pattern), x
+			end,
+			description = "Your nickname on Transformice."
 		}
 	}
 	profileStruct.bday = {
@@ -994,6 +1018,18 @@ end
 	!table
 ]]
 local currency = {}
+--[[Doc
+	~
+	"Modulo form-data request boundaries"
+	!table
+]]
+local boundaries = { }
+do
+	boundaries[1] = "ModuloBot_" .. os.time()
+	boundaries[2] = "--" .. boundaries[1]
+	boundaries[3] = boundaries[2] .. "--"
+	
+end
 
 local polls = {
 	__REACTIONS = { "\x31\xE2\x83\xA3", "\x32\xE2\x83\xA3" }
@@ -1011,34 +1047,6 @@ local toDelete = setmetatable({}, {
 })
 
 --[[ Functions ]]--
-local removeAccents
-do
-	local letters = {
-		["a"] = "áàâäãå",
-		["e"] = "éèêë",
-		["i"] = "íìîï",
-		["o"] = "óòôöõ",
-		["u"] = "úùûü",
-		["c"] = 'ç',
-		["n"] = 'ñ',
-		["y"] = "ýÿ"
-	}
-	--[[Doc
-		"Removes the accents in the string"
-		@str string
-		>stirng
-	]]
-	removeAccents = function(str)
-		for s = 1, 2 do
-			local f = (s == 1 and string.lower or string.upper)
-			for letter, repl in next, letters do
-				str = string.gsub(str, "[" .. f(repl) .. "]", f(letter))
-			end
-		end
-		return str
-	end
-end
-
 --[[Doc
 	"Encodes a string in the HTML format. Escapes all the characters."
 	@url string
@@ -1054,16 +1062,6 @@ local encodeUrl = function(url)
 	return '%' .. table.concat(out, '%')
 end
 
-local save
---[[Doc
-	~
-	"Generates a new member in the staffMembers data table"
-	@member Discordia.Guild.Member
-]]
-local generateStaffMember = function(member)
-	staffMembers[member.id] = { }
-	save("b_memberprofiles", staffMembers)
-end
 --[[Doc
 	"Returns the years between the current date and another date."
 	@date string
@@ -1331,6 +1329,7 @@ local messageCreate = function(message, skipChannelActivity)
 		local missingParameters, wrongSettings = { }, { }, { }, { }
 		if settings then
 			string.gsub(settings, "[^\n]+", function(setting)
+				setting = string.trim(setting)
 				local setting_wo_param = string.match(setting, "^%S+") or setting
 				if imageHandler.methodFlags[setting_wo_param] then
 					if imageHandler.methodFlags[setting_wo_param] == 1 and not string.find(setting, " .") then
@@ -1376,6 +1375,7 @@ local messageCreate = function(message, skipChannelActivity)
 
 		if can then
 			message:addReaction("\xF0\x9F\x93\xB7")
+			message:addReaction("\xE2\x9D\x8C")
 		end
 		return
 	end
@@ -1652,17 +1652,23 @@ local reactionAdd = function(cached, channel, messageId, hash, userId)
 		end
 	elseif channel.id == channels["image"] then
 		--@MoonBot
-		if client:getChannel(channels["bridge"]).guild:getMember(channels["bot2"]).status == "offline" then
+		if hash ~= "\xE2\x9D\x8C" and client:getChannel(channels["bridge"]).guild:getMember(channels["bot2"]).status == "offline" then
 			return message:removeReaction(hash, userId)
 		end
 
 		local member = message.channel.guild:getMember(userId)
 
 		if hasPermission(permissions.is_module, member) then
+			local img = (message.attachment and message.attachment.url or nil)
+
+			if hash == "\xE2\x9D\x8C" then
+				message.author:send("Hello, unfortunately your **#image-host** request has been denied. It may be inappropriate, may have copyrights or may have something wrong.\n\nOriginal post:\n\n" .. message.content .. "\n" .. (img or ""))
+				return message:delete()
+			end
+
 			local iniSettings, _, __, settings = string.find(message.content, "`(`?`?)\n?(.-)%1`$")
 
 			local content = string.sub(message.content, 1, (iniSettings or 0) - 1)
-			local img = (message.attachment and message.attachment.url or nil)
 			if img then
 				img = imageHandler.fromUrl(img)
 			end
@@ -1671,25 +1677,65 @@ local reactionAdd = function(cached, channel, messageId, hash, userId)
 			if settings then
 				local s = { }
 				string.gsub(settings, "[^\n]+", function(setting)
+					setting = string.trim(setting)
 					local setting_wo_param = string.match(setting, "^%S+") or setting
 					s[setting_wo_param] = imageHandler.methodFlags[setting_wo_param] == 0 and "" or string.match(setting, " (.-)$")
 				end)
 
+				local imgurAuth = { "Authorization", "Client-ID " .. tokens.imgur }
 				local images = { img }
 				for link in string.gmatch(content, "[^\n]+") do
-					images[#images + 1] = imageHandler.fromUrl(link)
+					if string.sub(link, 1, 20) == "https://imgur.com/a/" then
+						local header, body = http.request("GET", "https://api.imgur.com/3/album/" .. string.sub(link, 21) .. "/images", { imgurAuth })
+						body = json.decode(body)
+
+						local len
+						for image = 1, (body.data and #body.data or 0) do
+							len = #images + 1
+							images[len] = imageHandler.fromUrl(body.data[image].link)
+							images[len].fromAlbum = true
+						end
+					else
+						images[#images + 1] = imageHandler.fromUrl(link)
+					end
 				end
 
+				local album = { }
 				for i = 1, #images do
 					for setting, param in next, s do
 						images[i][setting](images[i], param)
 					end
 					images[i]:apply()
 
-					client:getChannel(channels["bridge"]):send({
-						content = "!upload `" .. userId .. "|" .. message.author.id .. "`",
-						file = tostring(images[i])
-					})
+					if images[i].fromAlbum then
+						album[#album + 1] = images[i]
+					else
+						client:getChannel(channels["bridge"]):send({
+							content = "!upload `" .. userId .. "|" .. message.author.id .. "`",
+							file = tostring(images[i])
+						})
+					end
+				end
+
+				if #album > 0 then
+					local _, body = http.request("POST", "https://api.imgur.com/3/album", { imgurAuth })
+					local albumCode, albumHash = string.match(body, '"id":"(.-)","deletehash":"(.-)"')
+
+					local file, bin
+					for image = 1, #album do
+						file = io.open(tostring(album[image]), "rb")
+						bin = file:read("*a")
+						file:close()
+
+						_, body = http.request("POST", "https://api.imgur.com/3/image", {
+							imgurAuth,
+							{ "Content-Type", "multipart/form-data; boundary=" .. boundaries[1] }
+						}, boundaries[2] .. '\r\nContent-Disposition: form-data; name="image"\r\n\r\n' .. bin .. '\r\n' .. boundaries[2] .. '\r\nContent-Disposition: form-data; name="album"\r\n\r\n' .. albumHash .. '\r\n' .. boundaries[3])
+					end
+
+					if body then
+						client:getChannel(channels["bridge"]):send("!upload `" .. userId .. "|" .. message.author.id .. "` https://imgur.com/a/" .. albumCode)
+					end
 				end
 			else
 				local cmd = "!upload `" .. userId .. "|" .. message.author.id .. "` "
@@ -1760,6 +1806,33 @@ local reactionRemove = function(cached, channel, messageId, hash, userId)
 		end
 	end
 end
+local removeAccents
+do
+	local letters = {
+		["a"] = "áàâäãå",
+		["e"] = "éèêë",
+		["i"] = "íìîï",
+		["o"] = "óòôöõ",
+		["u"] = "úùûü",
+		["c"] = 'ç',
+		["n"] = 'ñ',
+		["y"] = "ýÿ"
+	}
+	--[[Doc
+		"Removes the accents in the string"
+		@str string
+		>stirng
+	]]
+	removeAccents = function(str)
+		for s = 1, 2 do
+			local f = (s == 1 and string.lower or string.upper)
+			for letter, repl in next, letters do
+				str = string.gsub(str, "[" .. f(repl) .. "]", f(letter))
+			end
+		end
+		return str
+	end
+end
 
 --[[Doc
 	~
@@ -1769,7 +1842,7 @@ end
 	@append boolean*
 	>boolean
 ]]
-save = function(fileName, db, append)
+local save = function(fileName, db, append)
 	local http, body = http.request("PUT", "http://miceclan.com/translators/set?k=" .. tokens.miceclan .. "&f=" .. fileName .. (append and "&a=a" or ''), nil, "d=" .. (append and tostring(db) or json.encode(db)):gsub("%+", "((12))"))
 
 	return body == "true"
@@ -2014,10 +2087,12 @@ commands["a801"] = {
 			parameters = string.gsub(string.lower(parameters), '%a', string.upper, 1)
 
 			local href = "https://atelier801.com/profile?pr=" .. encodeUrl(parameters)
-			local head, body = http.request("GET", href)
+			local head, body = http.request("GET", href, {
+				{ "Accept-Language", "en-US,en;q=0.9" }
+			})
 
 			if body then
-				if string.find(body, "La requête contient un ou plusieurs paramètres invalides") then
+				if string.find(body, "The request contains one or more invalid parameters") then
 					toDelete[message.id] = message:reply({
 						embed = {
 							color = color.atelier801,
@@ -2027,9 +2102,9 @@ commands["a801"] = {
 					})
 				else
 					local gender = ''
-					if string.find(body, "Féminin") then
+					if string.find(body, "Female") then
 						gender = "<:female:456193579308679169> "
-					elseif string.find(body, "Masculin") then
+					elseif string.find(body, "Male") then
 						gender = "<:male:456193580155928588> "
 					end
 
@@ -2039,7 +2114,7 @@ commands["a801"] = {
 						avatar = "https://i.imgur.com/dkhvbrg.png"
 					end
 
-					local community = string.match(body, "Communauté :</span> <img src=\"/img/pays/(.-)%.png\"")
+					local community = string.match(body, "Community :</span> <img src=\"/img/pays/(.-)%.png\"")
 					if not community or community == "xx" then
 						community = "<:international:458411936892190720>"
 					else
@@ -2049,7 +2124,7 @@ commands["a801"] = {
 					local fields = {
 						[1] = {
 							name = "Registration Date",
-							value = ":calendar: " .. tostring(string.match(body, "Date d'inscription</span> : (.-)</span>")),
+							value = ":calendar: " .. tostring(string.match(body, "Registration date</span> : (.-)</span>")),
 							inline = true,
 						},
 						[2] = {
@@ -2059,12 +2134,12 @@ commands["a801"] = {
 						},
 						[3] = {
 							name = "Messages",
-							value = ":speech_balloon: " .. tostring(string.match(body, "Messages : </span>(%d+)")),
+							value = ":speech_balloon: " .. tostring(string.match(body, "Messages: </span>(%d+)")),
 							inline = true,
 						},
 						[4] = {
 							name = "Prestige",
-							value = ":hearts: " .. tostring(string.match(body, "Prestige : </span>(%d+)")),
+							value = ":hearts: " .. tostring(string.match(body, "Prestige: </span>(%d+)")),
 							inline = true,
 						},
 						[5] = {
@@ -2709,7 +2784,7 @@ commands["profile"] = {
 			if member then
 				if hasPermission(permissions.has_power, member) then
 					if not staffMembers[member.id] then
-						generateStaffMember(member)
+						staffMembers[member.id] = { }
 					end
 					p = {
 						discord = member,
@@ -2728,6 +2803,12 @@ commands["profile"] = {
 		local fields = { }
 
 		local icon = " "
+		fields[#fields + 1] = p.data.nickname and {
+			name = "<:atelier:458403092417740824> TFM Nickname",
+			value = "[" .. string.gsub(p.data.nickname, "#0000", '', 1) .. "](https://atelier801.com/profile?pr=" .. encodeUrl(p.data.nickname) .. ")",
+			inline = true
+		} or nil
+
 		if hasPermission(permissions.is_module, p.discord) then
 			icon = icon .. "<:wheel:456198795768889344> "
 			if p.data[1] and table.count(p.data[1]) > 0 then
@@ -3066,6 +3147,43 @@ commands["tree"] = {
 		toDelete[message.id] = msgs
 	end
 }
+commands["word"] = {
+	auth = permissions.public,
+	description = "Translates a sentence using Google Translate. Professional translations: https://discord.gg/mMre2Dz",
+	f = function(message, parameters)
+		local syntax = "Use `!word from_language-to_language ``` sentence ``` `."
+
+		if parameters and #parameters > 0 then
+			local language, _, content = string.match(parameters, "(.-)[ \n]+`(`?`?)(.*)%2`")
+			if language and content and #content > 0 then
+				language = string.lower(language)
+				content = string.sub(content, 1, 100)
+
+				local head, body = http.request("GET", "https://translate.yandex.net/api/v1.5/tr.json/translate?key=trnsl.1.1.20180406T014324Z.87adf2b8b3335e7c.212f70178f4e714754506277683f3b2cf308c272&text=" .. encodeUrl(content) .. "&lang=" .. language .. (string.find(language, "%-") and '' or "&options=1"))
+				body = json.decode(tostring(body))
+
+				if body and body.text then
+					body.lang = string.lower(body.lang)
+					local from, to = string.match(body.lang, "(.-)%-(.+)")
+
+					from, to = string.upper(from), string.upper(to)
+
+					toDelete[message.id] = message:reply({
+						embed = {
+							color = color.interaction,
+							title = ":earth_americas: Quick Translation",
+							description = (countryFlags[from] or '') .. "@**" .. from .. "**\n```\n" .. content .. "```" .. (countryFlags[to] or '') .. "@**" .. to .. "**\n```\n" .. table.concat(body.text, "\n") .. "```"
+						}
+					})
+				end
+			else
+				sendError(message, "WORD", "Invalid parameters.", syntax)
+			end
+		else
+			sendError(message, "WORD", "Missing parameters.", syntax)
+		end
+	end
+}
 	-- Not public
 commands["edit"] = {
 	auth = permissions.has_power,
@@ -3096,6 +3214,7 @@ commands["edit"] = {
 					if not value then
 						return sendError(message, "EDIT", "The value must be a number.")
 					end
+					value = math.floor(value)
 				end
 
 				if profileStruct[field].min and (isNumber and value or #value) < profileStruct[field].min then
@@ -3146,7 +3265,6 @@ commands["edit"] = {
 					old_value = staffMembers[message.author.id][field]
 					staffMembers[message.author.id][field] = value
 				end
-				save("b_memberprofiles", staffMembers)
 
 				message.author:send({
 					content = "<@!" .. message.author.id .. ">",
@@ -3284,43 +3402,6 @@ commands["remind"] = {
 			sendError(message, "REMIND", "Invalid or missing parameters.", "Use `!remind time_and_order text`.")
 		end
 	end
-}
-commands["word"] = {
-	auth = permissions.has_power,
-	description = "Translates a sentence using Google Translate. Professional translations: https://discord.gg/mMre2Dz",
-	f = function(message, parameters)
-		local syntax = "Use `!word from_language-to_language ``` sentence ``` `."
-
-		if parameters and #parameters > 0 then
-			local language, _, content = string.match(parameters, "(.-)[ \n]+`(`?`?)(.*)%2`")
-			if language and content and #content > 0 then
-				language = string.lower(language)
-				content = string.sub(content, 1, 100)
-
-				local head, body = http.request("GET", "https://translate.yandex.net/api/v1.5/tr.json/translate?key=trnsl.1.1.20180406T014324Z.87adf2b8b3335e7c.212f70178f4e714754506277683f3b2cf308c272&text=" .. encodeUrl(content) .. "&lang=" .. language .. (string.find(language, "%-") and '' or "&options=1"))
-				body = json.decode(tostring(body))
-
-				if body and body.text then
-					body.lang = string.lower(body.lang)
-					local from, to = string.match(body.lang, "(.-)%-(.+)")
-
-					from, to = string.upper(from), string.upper(to)
-
-					toDelete[message.id] = message:reply({
-						embed = {
-							color = color.interaction,
-							title = ":earth_americas: Quick Translation",
-							description = (countryFlags[from] or '') .. "@**" .. from .. "**\n```\n" .. content .. "```" .. (countryFlags[to] or '') .. "@**" .. to .. "**\n```\n" .. table.concat(body.text, "\n") .. "```"
-						}
-					})
-				end
-			else
-				sendError(message, "WORD", "Invalid parameters.", syntax)
-			end
-		else
-			sendError(message, "WORD", "Missing parameters.", syntax)
-		end
-	end,
 }
 commands["xml"] = {
 	auth = permissions.has_power,
@@ -3595,7 +3676,7 @@ commands["lua"] = {
 							url = url .. tokens[token]
 						end
 					else
-						if (token[2] and tokens[token[2]] and string.find(url, "^" .. token_whitelist[2])) then
+						if (token[2] and tokens[token[2]] and string.find(url, "^" .. token_whitelist[token[2]])) then
 							if not header then
 								header = { }
 							end
@@ -4472,6 +4553,9 @@ commands["refresh"] = {
 		if table.count(activeMembers) > 0 then
 			save("b_activemembers", activeMembers)
 		end
+		if table.count(staffMembers) > 0 then
+			save("b_memberprofiles", staffMembers)
+		end
 
 		message:delete()
 		os.execute("luvit bot.lua")
@@ -4597,6 +4681,8 @@ client:on("ready", function()
 
 	devENV = setmetatable({}, {
 		__index = setmetatable({
+			boundaries = boundaries,
+
 			client = client,
 			commands = commands,
 			currency = currency,
@@ -4605,7 +4691,6 @@ client:on("ready", function()
 
 			getDatabase = getDatabase,
 			getLuaEnv = getLuaEnv,
-			generateStaffMember = generateStaffMember,
 
 			http = http,
 
@@ -4693,7 +4778,6 @@ client:on("memberLeave", function(member)
 	end
 	if staffMembers[member.id] then
 		staffMembers[member.id] = nil
-		save("b_memberprofiles", staffMembers)
 	end
 end)
 
@@ -4764,6 +4848,7 @@ clock:on("min", function()
 	if minutes % 5 == 0 then
 		save("b_activechannels", activeChannels)
 		save("b_activemembers", activeMembers)
+		save("b_memberprofiles", staffMembers)
 	end
 
 	for k, v in next, table.deepcopy(polls) do
