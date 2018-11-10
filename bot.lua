@@ -95,7 +95,11 @@ local channels = {
 	["map"] = "462279117866401792",
 	["bridge"] = "499635964503785533",
 	["bot2"] = "484182969926418434",
-	["flood"] = "465583146071490560"
+	["flood"] = "465583146071490560",
+	["guild"] = "462275923354451970",
+	["report"] = "510448208800120842",
+	["bug-report"] = "510645167737536512",
+	["bug-log"] = "498966653942366219"
 }
 --[[Doc
 	"Flags for the embed colors used in the bot."
@@ -108,6 +112,26 @@ local color = {
 	lua_err = 0xC45273,
 	sys = 0x4F545C,
 	lua = 0x272792,
+}
+--[[Doc
+	"Table of reactions used in the bot."
+	!table
+]]
+local reactions = {
+	p41 = "p41:463508055577985024",
+	camera = "\xF0\x9F\x93\xB7",
+	x = "\xE2\x9D\x8C",
+	hand = "\xF0\x9F\x99\x8B",
+	bomb = "\xF0\x9F\x92\xA3",
+	boot = "\xF0\x9F\x91\xA2",
+	wave = "\xF0\x9F\x91\x8B",
+	star = "\xE2\xAD\x90",
+	skull = "\xF0\x9F\x92\x80",
+	bug = "\xF0\x9F\x90\x9B",
+	eyes2 = "eyes2:499367166299340820",
+	online = "online:456197711356755980",
+	idle = "idle:456197711830581249",
+	dnd = "dnd:456197711251636235"
 }
 --[[Doc
 	"Flags of the bytes of the flag emojis of each community in Transformice."
@@ -835,6 +859,18 @@ local token_whitelist = {
 	!table
 ]]
 local commands = {}
+--[[Doc
+	~
+	"Bot behavior in specific channels. (IO)"
+	!table
+]]
+local channelCommandBehaviors = {}
+--[[Doc
+	~
+	"Bot behavior in specific channels when an reaction is added or removed."
+	!table
+]]
+local channelReactionBehaviors = {}
 
 local devENV, moduleENV = {}, {}
 --[[Doc
@@ -1028,7 +1064,7 @@ do
 	boundaries[1] = "ModuloBot_" .. os.time()
 	boundaries[2] = "--" .. boundaries[1]
 	boundaries[3] = boundaries[2] .. "--"
-	
+
 end
 
 local polls = {
@@ -1212,359 +1248,6 @@ local log = function(category, text, color)
 	print(os.date("%Y-%m-%d %H:%M:%S") .. " | \27[1;" .. color .. "m[" .. category .. "]\27[0m\t| " .. text)
 end
 
-local messageCreate = function(message, skipChannelActivity)
-	-- Ignore its own messages
-	if message.author.id == client.user.id then return end
-
-	-- Bridge system (Output)
-	if message.channel.id == channels["bridge"] and message.content then
-		local user, member = string.match(message.content, "(%d+)|(%d+)")
-		local by = "Hosted by **" .. client:getUser(member).fullname .. "**"
-
-		local private_message = client:getUser(user):send({ content = by, embed = message.embed })
-		if not private_message then
-			local channel = client:getChannel(channels["flood"])
-			channel:send("Hi <@" .. user .. ">, to get your hosted image via Private Message, please allow members of this server to message you! To do so, follow these steps:\nRight-click the server, go in `Privacy Settings` (https://i.imgur.com/utxsBcH.png)\n\nEnable it! (https://i.imgur.com/mep2kIQ.png).\n\nThank you. ~<@" .. client.user.id .. ">")
-			channel:send({
-				content = "<@" .. user .. ">\n" .. by,
-				embed = message.embed
-			})
-		end
-		return message:delete()
-	end
-
-	-- Skips bot messages
-	if message.author.bot then return end
-
-	-- Doesn't allow private messages
-	if message.channel.type == 1 then return end
-
-	-- Bridge system (Input)
-	if message.channel.id == channels["map"] then
-		local lines, wrongPerm, counter = { }, { }, 0
-		for line in string.gmatch(message.content, "[^\n]+") do
-			line = string.trim(line)
-
-			counter = counter + 1
-			if counter == 1 then
-				if string.sub(line, 1, 1) ~= "#" then
-					message.author:send({
-						embed = {
-							color = color.err,
-							title = "#map-perm",
-							description = "Your map request must start with the #module_name."
-						}
-					})
-					return message:delete()
-				end
-			else
-				local cat, code = string.match(line, "^[Pp](%d+) *%- *(@%d+)$")
-				if not cat then
-					cat = "41"
-					code = string.match(line, "^(@%d+)$")
-				end
-
-				if cat and code then
-					if not permMaps[cat] then
-						wrongPerm[#wrongPerm + 1] = code
-					end
-				else
-					message.author:send({
-						embed = {
-							color = color.err,
-							title = "#map-perm",
-							description = "Wrong submission format. Use:\n\n#module_name\nPCategory - @code\n@code\n@code"
-						}
-					})
-					return message:delete()
-				end
-			end
-		end
-
-		if #wrongPerm > 0 then
-			message.author:send({
-				embed = {
-					color = color.err,
-					title = "#map-perm",
-					description = "Some categories you requested are unavailable. The available categories are: **P" .. concat(permMaps, "** - **P", tostring) .. "**\nConsider fixing the categories of the following maps: `" .. table.concat(wrongPerm, "`, `") .. "`"
-				}
-			})
-		end
-
-		if #wrongPerm < (counter - 1) then
-			message:addReaction("p41:463508055577985024")
-		end
-		return
-	elseif message.channel.id == channels["image"] then
-		local iniSettings, _, __, settings = string.find(message.content, "`(`?`?)\n?(.-)%1`$")
-
-		local content = string.sub(message.content, 1, (iniSettings or 0) - 1)
-		local img = (message.attachment and message.attachment.url or nil)
-		if img then
-			content = content .. "\n" .. img
-		end
-
-		if not string.find(content, "https?://") then
-			message.author:send({
-				embed = {
-					color = color.err,
-					title = "#image-host",
-					description = "Wrong image submissions format. Use:\n\nurl\nurl\n..." .. (settings and "\n\\`\\`\\`\nSettings\n\\`\\`\\`" or "")
-				}
-			})
-			return message:delete()
-		end
-
-		local wrongLinks, counter = { }, 0
-
-		for line in string.gmatch(content, "[^\n]+") do
-			local success = pcall(http.request, "GET", line)
-			if not success then
-				counter = counter + 1
-				wrongLinks[counter] = line
-			end
-		end
-
-		counter = 0
-		local missingParameters, wrongSettings = { }, { }, { }, { }
-		if settings then
-			string.gsub(settings, "[^\n]+", function(setting)
-				setting = string.trim(setting)
-				local setting_wo_param = string.match(setting, "^%S+") or setting
-				if imageHandler.methodFlags[setting_wo_param] then
-					if imageHandler.methodFlags[setting_wo_param] == 1 and not string.find(setting, " .") then
-						missingParameters[#missingParameters + 1] = setting_wo_param
-					end
-				else
-					wrongSettings[#wrongSettings + 1] = setting_wo_param
-				end
-			end)
-		end
-
-		local can = true
-		if #wrongLinks > 0 then
-			can = false
-			message.author:send({
-				embed = {
-					color = color.err,
-					title = "#image-host",
-					description = "Some links you sent are invalid.\nConsider fixing them: <" .. table.concat(wrongLinks, ">\n<") .. ">"
-				}
-			})
-		end
-		if #missingParameters > 0 then
-			can = false
-			message.author:send({
-				embed = {
-					color = color.err,
-					title = "#image-host",
-					description = "Some image settings you requested are missing parameters.\nConsider adding parameters in the following settings: `" .. table.concat(missingParameters, "`, `") .. "`"
-				}
-			})
-		end
-		if #wrongSettings > 0 then
-			can = false
-			message.author:send({
-				embed = {
-					color = color.err,
-					title = "#image-host",
-					description = "Some image settings you requested are unavailable. The available settings are: **" .. concat(imageHandler.methodFlags, "** - **", tostring) .. "**\nConsider removing them: `" .. table.concat(wrongSettings, "`, `") .. "`"
-				}
-			})
-		end
-
-		if can then
-			message:addReaction("\xF0\x9F\x93\xB7")
-			message:addReaction("\xE2\x9D\x8C")
-		end
-		return
-	end
-
-	-- Detect prefix
-	local prefix = "!"
-	local category = message.channel.category and string.lower(message.channel.category.name) or nil
-	if category and string.sub(category, 1, 1) == "#" and modules[category].prefix then
-		prefix = modules[category].prefix
-	end
-
-	-- Detect command and parameters
-	local command, parameters = string.match(message.content, "^" .. prefix .. "(.-)[\n ]+(.*)")
-	command = command or string.match(message.content, "^" .. prefix .. "(.+)")
-
-	if not command then
-		if string.find(message.content, "L%.?U%.?A%.?") then
-			message:reply("Lua *, it's not an acronym. Noob!")
-		end
-
-		if not skipChannelActivity then
-			if not lastMemberTexting[message.channel.id] or #lastMemberTexting[message.channel.id] > 100 then
-				lastMemberTexting[message.channel.id] = { message.author.id }
-			else
-				table.insert(lastMemberTexting[message.channel.id], 1, message.author.id)
-			end
-
-			local can = 0
-			for p = 1, 3 do -- Can only message 3 times
-				if lastMemberTexting[message.channel.id][p] and lastMemberTexting[message.channel.id][p] == message.author.id then
-					can = can + 1
-				end
-			end
-
-			if can < 3 then
-				if not activeChannels[message.channel.id] then
-					activeChannels[message.channel.id] = 1
-				else
-					activeChannels[message.channel.id] = activeChannels[message.channel.id] + 1
-				end
-			end
-
-			if not memberTimers[message.author.id] then
-				memberTimers[message.author.id] = 0
-			end
-			if os.time() > memberTimers[message.author.id] then
-				memberTimers[message.author.id] = os.time() + 3
-				if not activeMembers[message.author.id] then
-					activeMembers[message.author.id] = 1
-				else
-					activeMembers[message.author.id] = activeMembers[message.author.id] + 1
-				end
-			end
-		end
-		return
-	end
-
-	command = string.lower(command)
-	parameters = (parameters and parameters ~= '') and string.trim(parameters) or nil
-
-	-- Function call
-	local botCommand, moduleCommand, cmd = true, false, commands[command]
-	if not cmd then
-		botCommand = false
-		moduleCommand = true
-		cmd = modules[category] and modules[category].commands[command] or nil
-		if not cmd then
-			moduleCommand = false
-			cmd = globalCommands[command] or nil
-		end
-	end
-
-	if cmd then
-		message.channel:broadcastTyping()
-
-		if not (authIds[message.author.id] or hasPermission(cmd.auth, message.member, message)) then
-			toDelete[message.id] = message:reply({
-				content = "<@!" .. message.author.id .. ">",
-				embed = {
-					color = color.err,
-					title = "Authorization denied.",
-					description = "You do not have access to the command `" .. (moduleCommand and (category .. ".") or '') .. command .. "`!"
-				}
-			})
-			return
-		end
-
-		local success, err
-		if botCommand then
-			success, err = pcall(cmd.f, message, parameters, category)
-		else
-			success, err = pcall(function()
-				if cmd.category then
-					if cmd.category ~= (message.channel.category and message.channel.category.id or nil) then
-						toDelete[message.id] = message:reply({
-							content = "<@!" .. message.author.id .. ">",
-							embed = {
-								color = color.err,
-								title = "Authorization denied.",
-								description = "You can't use this command in this category."
-							}
-						})
-						return
-					end
-				elseif cmd.channel then
-					if cmd.channel ~= message.channel.id then
-						toDelete[message.id] = message:reply({
-							content = "<@!" .. message.author.id .. ">",
-							embed = {
-								color = color.err,
-								title = "Authorization denied.",
-								description = "You can't use this command in this channel."
-							}
-						})
-						return
-					end
-				end
-
-				local embed = table.copy(cmd.embed)
-
-				embed.title = base64.decode(embed.title)
-				embed.description = base64.decode(embed.description)
-				if embed.image then
-					embed.image.url = base64.decode(embed.image.url)
-				end
-
-				local msg
-				if embed.title or embed.description or embed.image then
-					msg = message:reply({
-						embed = embed
-					})
-				end
-
-				local msgs
-				if cmd.script then
-					msgs = commands["lua"].f(message, (parameters and "`\nlocal parameters = \"" .. (string.gsub(tostring(parameters), "\"", "\\\"")) .. "\"\n" or "`") .. base64.decode(cmd.script) .. "`", nil, debugAction.cmd)
-				end
-
-				if msgs then
-					if msg then
-						msgs[#msgs + 1] = msg
-					end
-					toDelete[message.id] = msgs
-				elseif msg then
-					toDelete[message.id] = msg
-				end
-			end)
-		end
-
-		if not success then
-			toDelete[message.id] = message:reply({
-				embed = {
-					color = color.lua_err,
-					title = "Command [" .. string.upper(command) .. "] => Fatal Error!",
-					description = "```\n" .. err .. "```"
-				}
-			})
-		end
-	end
-end
-local messageDelete = function(message, skipChannelActivity)
-	if toDelete[message.id] then
-		local msg
-		for id = 1, #toDelete[message.id] do
-			msg = message.channel:getMessage(toDelete[message.id][id])
-			if msg then
-				msg:delete()
-			end
-		end
-
-		toDelete[message.id] = nil
-	elseif not skipChannelActivity then
-		if (os.time() - 60) < discordia.Date.fromISO(message.timestamp):toSeconds() then
-			if activeChannels[message.channel.id] and activeChannels[message.channel.id] > 0 then
-				activeChannels[message.channel.id] = activeChannels[message.channel.id] - 1
-			end
-			if activeMembers[message.author.id] and activeMembers[message.author.id] > 0 then
-				activeMembers[message.author.id] = activeMembers[message.author.id] - 1
-			end
-		end
-	end
-end
-local messageUpdate = function(message)
-	if message.channel.id == channels["bridge"] then return end
-
-	messageDelete(message, true)
-	messageCreate(message, true)
-end
-
 local normalizeDiscriminator
 --[[Doc
 	"Normalizes a Transformice's nickname's discriminator, removing the `#0000` and highlighting `#xxxx`."
@@ -1583,229 +1266,6 @@ local printf = function(...)
 	return table.concat(out, "\t")
 end
 
-local reactionAdd = function(cached, channel, messageId, hash, userId)
-	if userId == client.user.id then return end
-
-	local message = channel:getMessage(messageId)
-	if channel.id == channels["modules"] then
-		local module = message and message.embed.title
-
-		if module then
-			local member = channel.guild:getMember(userId)
-
-			if member then
-				local role = channel.guild.roles:find(function(role)
-					return role.name == "public-" .. module
-				end)
-
-				if role then
-					if not member:hasRole(role) then
-						member:addRole(role)
-					end
-				end
-			end
-		end
-	elseif channel.id == channels["commu"] then
-		for flag, flagHash in next, countryFlags do
-			if not countryFlags_Aliases[flag] and flagHash == hash then
-				local role = channel.guild.roles:find(function(role)
-					return role.name == flag
-				end)
-
-				if role then
-					channel.guild:getMember(userId):addRole(role)
-				end
-				return
-			end
-		end
-	elseif channel.id == channels["map"] then
-		local member = message.channel.guild:getMember(userId)
-
-		if hasPermission(permissions.is_module, member) then
-			--@MoonBot
-			if client:getChannel(channels["bridge"]).guild:getMember(channels["bot2"]).status == "offline" then
-				return message:removeReaction(hash, userId)
-			end
-
-			local maps = { }
-			for line in string.gmatch(message.content, "[^\n]+") do
-				local cat, code = string.match(line, "^[Pp](%d+) *%- *(@%d+)$")
-				if not cat then
-					cat = "41"
-					code = string.match(line, "^(@%d+)$")
-				end
-
-				if cat and code then
-					if permMaps[cat] then
-						if not maps[cat] then
-							maps[cat] = { }
-						end
-						maps[cat][#maps[cat] + 1] = code
-					end
-				end
-			end
-
-			message:delete()
-			for k, v in next, maps do
-				client:getChannel(channels["bridge"]):send("%p" .. k .. " " .. table.concat(v, ' '))
-			end
-		end
-	elseif channel.id == channels["image"] then
-		--@MoonBot
-		if hash ~= "\xE2\x9D\x8C" and client:getChannel(channels["bridge"]).guild:getMember(channels["bot2"]).status == "offline" then
-			return message:removeReaction(hash, userId)
-		end
-
-		local member = message.channel.guild:getMember(userId)
-
-		if hasPermission(permissions.is_module, member) then
-			local img = (message.attachment and message.attachment.url or nil)
-
-			if hash == "\xE2\x9D\x8C" then
-				message.author:send("Hello, unfortunately your **#image-host** request has been denied. It may be inappropriate, may have copyrights or may have something wrong.\n\nOriginal post:\n\n" .. message.content .. "\n" .. (img or ""))
-				return message:delete()
-			end
-
-			local iniSettings, _, __, settings = string.find(message.content, "`(`?`?)\n?(.-)%1`$")
-
-			local content = string.sub(message.content, 1, (iniSettings or 0) - 1)
-			if img then
-				img = imageHandler.fromUrl(img)
-			end
-
-			message:delete()
-			if settings then
-				local s = { }
-				string.gsub(settings, "[^\n]+", function(setting)
-					setting = string.trim(setting)
-					local setting_wo_param = string.match(setting, "^%S+") or setting
-					s[setting_wo_param] = imageHandler.methodFlags[setting_wo_param] == 0 and "" or string.match(setting, " (.-)$")
-				end)
-
-				local imgurAuth = { "Authorization", "Client-ID " .. tokens.imgur }
-				local images = { img }
-				for link in string.gmatch(content, "[^\n]+") do
-					if string.sub(link, 1, 20) == "https://imgur.com/a/" then
-						local header, body = http.request("GET", "https://api.imgur.com/3/album/" .. string.sub(link, 21) .. "/images", { imgurAuth })
-						body = json.decode(body)
-
-						local len
-						for image = 1, (body.data and #body.data or 0) do
-							len = #images + 1
-							images[len] = imageHandler.fromUrl(body.data[image].link)
-							images[len].fromAlbum = true
-						end
-					else
-						images[#images + 1] = imageHandler.fromUrl(link)
-					end
-				end
-
-				local album = { }
-				for i = 1, #images do
-					for setting, param in next, s do
-						images[i][setting](images[i], param)
-					end
-					images[i]:apply()
-
-					if images[i].fromAlbum then
-						album[#album + 1] = images[i]
-					else
-						client:getChannel(channels["bridge"]):send({
-							content = "!upload `" .. userId .. "|" .. message.author.id .. "`",
-							file = tostring(images[i])
-						})
-					end
-				end
-
-				if #album > 0 then
-					local _, body = http.request("POST", "https://api.imgur.com/3/album", { imgurAuth })
-					local albumCode, albumHash = string.match(body, '"id":"(.-)","deletehash":"(.-)"')
-
-					local file, bin
-					for image = 1, #album do
-						file = io.open(tostring(album[image]), "rb")
-						bin = file:read("*a")
-						file:close()
-
-						_, body = http.request("POST", "https://api.imgur.com/3/image", {
-							imgurAuth,
-							{ "Content-Type", "multipart/form-data; boundary=" .. boundaries[1] }
-						}, boundaries[2] .. '\r\nContent-Disposition: form-data; name="image"\r\n\r\n' .. bin .. '\r\n' .. boundaries[2] .. '\r\nContent-Disposition: form-data; name="album"\r\n\r\n' .. albumHash .. '\r\n' .. boundaries[3])
-					end
-
-					if body then
-						client:getChannel(channels["bridge"]):send("!upload `" .. userId .. "|" .. message.author.id .. "` https://imgur.com/a/" .. albumCode)
-					end
-				end
-			else
-				local cmd = "!upload `" .. userId .. "|" .. message.author.id .. "` "
-				for link in string.gmatch(content, "[^\n]+") do
-					client:getChannel(channels["bridge"]):send(cmd .. link)
-				end
-				if img then
-					client:getChannel(channels["bridge"]):send({
-						content = cmd,
-						file = tostring(img)
-					})
-				end
-			end
-		end
-	elseif not cached then -- in last because the above ^ can be uncached too
-		if polls[messageId] then
-			local found, answer = table.find(polls.__REACTIONS, hash)
-			if found then
-				polls[messageId].votes[answer] = polls[messageId].votes[answer] + 1
-				message:removeReaction(polls.__REACTIONS[(answer % 2) + 1], userId)
-			else
-				message:removeReaction(hash, userId)
-			end
-		end
-	end
-end
-local reactionRemove = function(cached, channel, messageId, hash, userId)
-	if userId == client.user.id then return end
-
-	if channel.id == channels["modules"] then
-		local message = channel:getMessage(messageId)
-		local module = message and message.embed.title
-
-		if module then
-			local member = channel.guild:getMember(userId)
-
-			if member then
-				local role = channel.guild.roles:find(function(role)
-					return role.name == "public-" .. module
-				end)
-
-				if role then
-					if member:hasRole(role) then
-						member:removeRole(role)
-					end
-				end
-			end
-		end
-	elseif channel.id == channels["commu"] then
-		for flag, flagHash in next, countryFlags do
-			if not countryFlags_Aliases[flag] and flagHash == hash then
-				local role = channel.guild.roles:find(function(role)
-					return role.name == flag
-				end)
-
-				if role then
-					channel.guild:getMember(userId):removeRole(role)
-				end
-				return
-			end
-		end
-	elseif not cached then
-		if polls[messageId] then
-			local found, answer = table.find(polls.__REACTIONS, hash)
-			if found then
-				polls[messageId].votes[answer] = polls[messageId].votes[answer] - 1
-			end
-		end
-	end
-end
 local removeAccents
 do
 	local letters = {
@@ -1952,6 +1412,34 @@ end
 
 --[[Doc
 	~
+	"Throws an error if a function doesn't load properly"
+	@message Discordia.Message
+	@errName string|table
+	@fn function
+	@... *
+]]
+local throwError = function(message, errName, fn, ...)
+	local success, err = pcall(fn, ...)
+	if not success then
+		local content = {
+			embed = {
+				color = color.lua_err,
+				title = (type(errName) == "string" and  ("evt@" .. errName) or errName[1]) .. " => Fatal Error!",
+				description = "```\n" .. err .. "```"
+			}
+		}
+
+		if message then
+			toDelete[message.id] = message:reply(content)
+		else
+			content.content = "<@" .. client.owner.id  .. ">"
+			client:getChannel(channels["flood"]):send(content)
+		end
+	end
+end
+
+--[[Doc
+	~
 	"Updates the currency table."
 ]]
 local updateCurrency = function()
@@ -2040,6 +1528,7 @@ local getLuaEnv = function()
 		permMaps = table.copy(permMaps),
 		profileStruct = table.deepcopy(profileStruct),
 
+		reactions = table.copy(reactions),
 		removeAccents = removeAccents,
 		roleColor = table.copy(roleColor),
 		roleFlags = table.copy(roleFlags),
@@ -2874,7 +2363,7 @@ commands["profile"] = {
 		if hasPermission(permissions.is_fash, p.discord) then
 			icon = icon .. "<:dance:468937918115741718> "
 			if p.data[6] and table.count(p.data[6]) > 0 then
-				
+
 			end
 		end
 		if hasPermission(permissions.is_evt, p.discord) then
@@ -2894,12 +2383,12 @@ commands["profile"] = {
 			inline = true
 		} or nil
 		local activity = not not activeMembers[p.discord.id]
-		
+
 		if bday or activity then
 			if bday then
 				fields[#fields + 1] = bday
 			end
-			
+
 			if activity then
 				local cachedMembers, loggedMemberMessages = sortActivityTable(activeMembers, function(id) return not message.guild:getMember(id) end)
 				local _, o = table.find(cachedMembers, p.discord.id, 1)
@@ -2982,6 +2471,48 @@ commands["quote"] = {
 		end
 	end
 }
+commands["report"] = {
+	auth = permissions.public,
+	description = "Reports a message.",
+	f = function(message, parameters)
+		local syntax = "To report a message, please make sure that your developer mode on discord is enabled. Use the command `!report message_id report_reason`"
+
+		message:delete()
+		if parameters and #parameters > 0 then
+			local msg, reason = string.match(parameters, "^(%d+)[\n ]+(.+)$")
+
+			if msg and reason then
+				msg = message.channel:getMessage(msg)
+
+				if msg and not msg.embed then
+					local report = client:getChannel(channels["report"]):send({
+						content = "Message from **" .. (msg.member or msg.author).name .. "** <@" .. msg.author.id .. ">\nReported by: **" .. message.member.name .. "** <@" .. message.member.id .. ">\n\nSource: <" .. msg.link .. "> | Reason:\n```\n" .. tostring(reason) .. "```",
+						embed = {
+							color = color.err,
+							description = (msg.content or nil),
+							image = (msg.attachment and msg.attachment.url) and { url = msg.attachment.url } or nil,
+							footer = {
+								text = "In " .. (msg.channel.category and (msg.channel.category.name .. ".#") or "#") .. msg.channel.name,
+							},
+							timestamp = string.gsub(msg.timestamp, ' ', ''),
+						}
+					})
+
+					report:addReaction(reactions.wave)
+					report:addReaction(reactions.bomb)
+					report:addReaction(reactions.boot)
+					report:addReaction(reactions.x)
+				else
+					message.author:send({ embed = { color = color.err, title = "<:ban:504779866919403520> Report", description = "Invalid message. " .. syntax } })
+				end
+			else
+				message.author:send({ embed = { color = color.err, title = "<:ban:504779866919403520> Report", description = syntax } })
+			end
+		else
+			message.author:send({ embed = { color = color.err, title = "<:ban:504779866919403520> Report", description = "Invalid or issing parameters. " .. syntax } })
+		end
+	end
+}
 commands["serverinfo"] = {
 	auth = permissions.public,
 	description = "Displays fun info about the server.",
@@ -3032,11 +2563,11 @@ commands["serverinfo"] = {
 					},
 					[5] = {
 						name = ":family_mmgb: Members",
-						value = string.format("<:online:456197711356755980> Online: %s | <:idle:456197711830581249> Away: %s | <:dnd:456197711251636235> Busy: %s | <:offline:456197711457419276> Offline: %s\n\n:raising_hand: **Total:** %s\n\n<:wheel:456198795768889344> **Module Members**: %s\n<:lua:468936022248390687> **Developers**: %s\n<:p5:468937377981923339> **Artists**: %s\n<:p41:463508055577985024> **Map Reviewers**: %s\n:earth_americas: **Translators**: %s\n<:dance:468937918115741718> **Fashionistas**: %s\n<:idea:463505036564234270> **Event Managers**: %s\n\n:robot: **Bots**: %s", members:count(function(member)
+						value = string.format("<:%s> Online: %s | <:%s> Away: %s | <:%s> Busy: %s | <:offline:456197711457419276> Offline: %s\n\n:raising_hand: **Total:** %s\n\n<:wheel:456198795768889344> **Module Members**: %s\n<:lua:468936022248390687> **Developers**: %s\n<:p5:468937377981923339> **Artists**: %s\n<:p41:463508055577985024> **Map Reviewers**: %s\n:earth_americas: **Translators**: %s\n<:dance:468937918115741718> **Fashionistas**: %s\n<:idea:463505036564234270> **Event Managers**: %s\n\n:robot: **Bots**: %s", reactions.online, members:count(function(member)
 							return member.status == "online"
-						end), members:count(function(member)
+						end), reactions.idle, members:count(function(member)
 							return member.status == "idle"
-						end), members:count(function(member)
+						end), reactions.dnd, members:count(function(member)
 							return member.status == "dnd"
 						end), members:count(function(member)
 							return member.status == "offline"
@@ -3151,10 +2682,10 @@ commands["word"] = {
 	auth = permissions.public,
 	description = "Translates a sentence using Google Translate. Professional translations: https://discord.gg/mMre2Dz",
 	f = function(message, parameters)
-		local syntax = "Use `!word from_language-to_language ``` sentence ``` `."
+		local syntax = "Use `!word from_language-to_language sentence`."
 
 		if parameters and #parameters > 0 then
-			local language, _, content = string.match(parameters, "(.-)[ \n]+`(`?`?)(.*)%2`")
+			local language, content = string.match(parameters, "(%S+)[ \n]+(.+)$")
 			if language and content and #content > 0 then
 				language = string.lower(language)
 				content = string.sub(content, 1, 100)
@@ -3634,7 +3165,7 @@ commands["lua"] = {
 			]]
 			ENV.discord.messageId = message.id
 			--[[Doc
-				"Deletes a message sent by the bot."
+				"Deletes a message sent by the bot. (3 minutes tolerance)"
 				@msgId string|int
 			]]
 			ENV.discord.delete = function(msgId)
@@ -3644,6 +3175,8 @@ commands["lua"] = {
 				assert(msg, "Message not found")
 
 				assert((msg.channel.id ~= channels["commu"] and msg.channel.id ~= channels["modules"]), "Message deletion denied.")
+
+				assert((os.time() - (60 * 3)) < discordia.Date.fromISO(msg.timestamp):toSeconds(), "The message cannot be deleted after 5 minutes.")
 
 				local canDelete = msg.author.id == message.author.id
 				if not canDelete then
@@ -3977,7 +3510,7 @@ commands["public"] = {
 						description = parameters,
 						footer = { text = "React to access the public channel of this module" }
 					}
-				}):addReaction("\xF0\x9F\x99\x8B")
+				}):addReaction(reactions.hand)
 
 				local del_msg = m_channel:send("@here")
 				del_msg:delete()
@@ -4406,22 +3939,39 @@ commands["cleareact"] = {
 	description = "Refreshes the #modules reactions.",
 	f = function(message)
 		local channel = client:getChannel(channels["modules"])
+		local commu = client:getChannel(channels["commu"]):getMessage("494675974034554890")
 
 		for member in message.guild.members:iter() do
-			for role in message.guild.roles:findAll(function(role) return string.find(role.name, "public") end) do
-				if member:hasRole(role.id) then
-					local module = string.match(role.name, "#(.+)")
+			if not member.bot then
+				for role in message.guild.roles:findAll(function(role) return string.find(role.name, "public") end) do
+					if member:hasRole(role.id) then
+						local module = string.match(role.name, "#(.+)")
 
-					local msg = client:getChannel(channels["modules"]):getMessages():find(function(msg)
-						return msg.embed and (msg.embed.title == module)
-					end)
+						local msg = client:getChannel(channels["modules"]):getMessages():find(function(msg)
+							return msg.embed and (msg.embed.title == module)
+						end)
 
-					if msg then
-						local reaction = msg.reactions:get("\xF0\x9F\x99\x8B")
+						if msg then
+							local reaction = msg.reactions:get(reactions.hand)
 
-						if reaction and not reaction:getUsers(100):get(member.id) then
-							member:removeRole(role.id)
+							if reaction and not reaction:getUsers(100):get(member.id) then
+								member:removeRole(role.id)
+							end
 						end
+					end
+				end
+
+				for role in message.guild.roles:findAll(function(role) return #role.name == 2 end) do -- Community
+					local reacted = commu.reactions:find(function(e) return e.emojiName == countryFlags[role.name] end):getUsers(100):find(function(u) return u.id == member.id end)
+
+					if member:hasRole(role.id) then
+						if not reacted then
+							member:removeRole(role.id)
+							print("Removed role " .. role.name .. " from " .. member.name)
+						end
+					elseif reacted then
+						member:addRole(role.id)
+						print("Added role " .. role.name .. " to " .. member.name)
 					end
 				end
 			end
@@ -4448,6 +3998,14 @@ commands["cleareact"] = {
 							end
 						end
 					end
+				end
+			end
+		end
+
+		for reaction in commu.reactions:iter() do
+			for user in reaction:getUsers(100):iter() do
+				if not user.bot and not message.guild:getMember(user.id) then
+					commu:removeReaction(reaction.emojiName, user.id)
 				end
 			end
 		end
@@ -4638,6 +4196,526 @@ commands["remmodule"] = {
 	end
 }
 
+--[[ Channel Behaviors ]]--
+channelCommandBehaviors["bridge"] = {
+	output = true,
+	f = function(message)
+		if not message.content or message.content == "" then return end
+
+		local user, member = string.match(message.content, "(%d+)|(%d+)")
+		local by = "Hosted by **" .. (client:getGuild(channels["guild"]):getMember(member) or client:getUser(member)).name .. "**"
+
+		local private_message = client:getUser(user):send({ content = by, embed = message.embed })
+		if not private_message then
+			local channel = client:getChannel(channels["flood"])
+			channel:send("Hi <@" .. user .. ">, to get your hosted image via Private Message, please allow members of this server to message you! To do so, follow these steps:\nRight-click the server, go in `Privacy Settings` (https://i.imgur.com/utxsBcH.png)\n\nEnable it! (https://i.imgur.com/mep2kIQ.png).\n\nThank you. ~<@" .. client.user.id .. ">")
+			channel:send({
+				content = "<@" .. user .. ">\n" .. by,
+				embed = message.embed
+			})
+		end
+		return message:delete()
+	end
+}
+channelCommandBehaviors["map"] = {
+	f = function(message)
+		if not message.content or message.content == "" then return end
+
+		local lines, wrongPerm, counter = { }, { }, 0
+		for line in string.gmatch(message.content, "[^\n]+") do
+			line = string.trim(line)
+
+			counter = counter + 1
+			if counter == 1 then
+				if string.sub(line, 1, 1) ~= "#" then
+					message.author:send({
+						embed = {
+							color = color.err,
+							title = "#map-perm",
+							description = "Your map request must start with the #module_name."
+						}
+					})
+					return message:delete()
+				end
+			else
+				local cat, code = string.match(line, "^[Pp](%d+) *%- *(@%d+)$")
+				if not cat then
+					cat = "41"
+					code = string.match(line, "^(@%d+)$")
+				end
+
+				if cat and code then
+					if not permMaps[cat] then
+						wrongPerm[#wrongPerm + 1] = code
+					end
+				else
+					message.author:send({
+						embed = {
+							color = color.err,
+							title = "#map-perm",
+							description = "Wrong submission format. Use:\n\n#module_name\nPCategory - @code\n@code\n@code"
+						}
+					})
+					return message:delete()
+				end
+			end
+		end
+
+		if #wrongPerm > 0 then
+			message.author:send({
+				embed = {
+					color = color.err,
+					title = "#map-perm",
+					description = "Some categories you requested are unavailable. The available categories are: **P" .. concat(permMaps, "** - **P", tostring) .. "**\nConsider fixing the categories of the following maps: `" .. table.concat(wrongPerm, "`, `") .. "`"
+				}
+			})
+		end
+
+		if #wrongPerm < (counter - 1) then
+			message:addReaction(reactions.p41)
+			message:addReaction(reactions.x)
+		end
+	end
+}
+channelCommandBehaviors["image"] = {
+	f = function(message)
+		local iniSettings, _, __, settings = string.find(message.content, "`(`?`?)\n?(.-)%1`$")
+
+		local content = string.sub(message.content, 1, (iniSettings or 0) - 1)
+		local img = (message.attachment and message.attachment.url or nil)
+		if img then
+			content = content .. "\n" .. img
+		end
+
+		if not string.find(content, "https?://") then
+			message.author:send({
+				embed = {
+					color = color.err,
+					title = "#image-host",
+					description = "Wrong image submissions format. Use:\n\nurl\nurl\n..." .. (settings and "\n\\`\\`\\`\nSettings\n\\`\\`\\`" or "")
+				}
+			})
+			return message:delete()
+		end
+
+		local wrongLinks, counter = { }, 0
+
+		for line in string.gmatch(content, "[^\n]+") do
+			local success = pcall(http.request, "GET", line)
+			if not success then
+				counter = counter + 1
+				wrongLinks[counter] = line
+			end
+		end
+
+		counter = 0
+		local missingParameters, wrongSettings = { }, { }, { }, { }
+		if settings then
+			string.gsub(settings, "[^\n]+", function(setting)
+				setting = string.trim(setting)
+				local setting_wo_param = string.match(setting, "^%S+") or setting
+				if imageHandler.methodFlags[setting_wo_param] then
+					if imageHandler.methodFlags[setting_wo_param] == 1 and not string.find(setting, " .") then
+						missingParameters[#missingParameters + 1] = setting_wo_param
+					end
+				else
+					wrongSettings[#wrongSettings + 1] = setting_wo_param
+				end
+			end)
+		end
+
+		local can = true
+		if #wrongLinks > 0 then
+			can = false
+			message.author:send({
+				embed = {
+					color = color.err,
+					title = "#image-host",
+					description = "Some links you sent are invalid.\nConsider fixing them: <" .. table.concat(wrongLinks, ">\n<") .. ">"
+				}
+			})
+		end
+		if #missingParameters > 0 then
+			can = false
+			message.author:send({
+				embed = {
+					color = color.err,
+					title = "#image-host",
+					description = "Some image settings you requested are missing parameters.\nConsider adding parameters in the following settings: `" .. table.concat(missingParameters, "`, `") .. "`"
+				}
+			})
+		end
+		if #wrongSettings > 0 then
+			can = false
+			message.author:send({
+				embed = {
+					color = color.err,
+					title = "#image-host",
+					description = "Some image settings you requested are unavailable. The available settings are: **" .. concat(imageHandler.methodFlags, "** - **", tostring) .. "**\nConsider removing them: `" .. table.concat(wrongSettings, "`, `") .. "`"
+				}
+			})
+		end
+
+		if can then
+			message:addReaction(reactions.camera)
+			message:addReaction(reactions.x)
+		end
+	end
+}
+channelCommandBehaviors["bug-report"] = {
+	f = function(message)
+		if not message.content or message.content == "" then return end
+
+		message:delete()
+
+		local pm = "Invalid report format. Please use the website <https://lautenschlager-id.github.io/bug-tool.github.io/> to build your command!"
+		if string.sub(message.content, 1, 4) ~= "bug " then
+			return message.author:send(pm)
+		end
+
+		local parameters = string.sub(message.content, 5)
+		
+		local tmpDash, tmpPipe = os.tmpname(), os.tmpname()
+		parameters = string.gsub(parameters, "\\%-", tmpDash)
+		parameters = string.gsub(parameters, "\\|", tmpPipe)
+
+		local values = string.split(parameters, "[^|]+", function(value)
+			return (string.gsub(string.trim(value), tmpPipe, '|'))
+		end)
+		if values[4] then
+			values[2] = string.split(values[2], "[^%-]+", function(value)
+				return (string.gsub(value, tmpDash, '-'))
+			end)
+
+			local msg = message:reply("<@" .. message.author.id .. "> Reported:\n\n**Short description:** " .. values[1] .. "\n**Steps to reproduce:**\n- " .. table.concat(values[2], "\n- ") .. "\n**Expected result:** " .. values[3] .. "\n**Actual result:** " .. values[4])
+			msg:addReaction(reactions.star)
+			msg:addReaction(reactions.skull)
+			msg:addReaction(reactions.bug)
+			msg:addReaction(reactions.eyes2)
+		else
+			message.author:send(pm)
+		end
+	end
+}
+
+--[[ Channel Reaction Behaviors ]]--
+channelReactionBehaviors["modules"] = {
+	f_Add = function(message, channel, hash, userId)
+		local module = message and message.embed.title
+
+		if module then
+			local member = channel.guild:getMember(userId)
+
+			if member then
+				local role = channel.guild.roles:find(function(role)
+					return role.name == "public-" .. module
+				end)
+
+				if role then
+					if not member:hasRole(role) then
+						member:addRole(role)
+					end
+				end
+			end
+		end
+	end,
+	f_Rem = function(channel, message, hash, userId)
+		local module = message and message.embed.title
+
+		if module then
+			local member = channel.guild:getMember(userId)
+
+			if member then
+				local role = channel.guild.roles:find(function(role)
+					return role.name == "public-" .. module
+				end)
+
+				if role then
+					if member:hasRole(role) then
+						member:removeRole(role)
+					end
+				end
+			end
+		end
+	end
+}
+channelReactionBehaviors["commu"] = {
+	f_Add = function(message, channel, hash, userId)
+		for flag, flagHash in next, countryFlags do
+			if not countryFlags_Aliases[flag] and flagHash == hash then
+				local role = channel.guild.roles:find(function(role)
+					return role.name == flag
+				end)
+
+				if role then
+					channel.guild:getMember(userId):addRole(role)
+				end
+				return
+			end
+		end
+	end,
+	f_Rem = function(channel, message, hash, userId)
+		for flag, flagHash in next, countryFlags do
+			if not countryFlags_Aliases[flag] and flagHash == hash then
+				local role = channel.guild.roles:find(function(role)
+					return role.name == flag
+				end)
+
+				if role then
+					local m = channel.guild:getMember(userId)
+					if m then
+						m:removeRole(role)
+					end
+				end
+				return
+			end
+		end
+	end
+}
+channelReactionBehaviors["map"] = {
+	f_Add = function(message, channel, hash, userId)
+		local member = channel.guild:getMember(userId)
+
+		if hasPermission(permissions.is_module, member) then
+			--@MoonBot
+			if client:getChannel(channels["bridge"]).guild:getMember(channels["bot2"]).status == "offline" then
+				return message:removeReaction(hash, userId)
+			end
+
+			if string.find(reactions.p41, hash) then
+				local maps = { }
+				for line in string.gmatch(message.content, "[^\n]+") do
+					local cat, code = string.match(line, "^[Pp](%d+) *%- *(@%d+)$")
+					if not cat then
+						cat = "41"
+						code = string.match(line, "^(@%d+)$")
+					end
+
+					if cat and code then
+						if permMaps[cat] then
+							if not maps[cat] then
+								maps[cat] = { }
+							end
+							maps[cat][#maps[cat] + 1] = code
+						end
+					end
+				end
+
+				message:delete()
+				for k, v in next, maps do
+					client:getChannel(channels["bridge"]):send("%p" .. k .. " " .. table.concat(v, ' '))
+				end
+			elseif hash == reactions.x then
+				message:delete()
+			end
+		end
+	end
+}
+channelReactionBehaviors["image"] = {
+	f_Add = function(message, channel, hash, userId)
+		--@MoonBot
+		if hash ~= reactions.x and client:getChannel(channels["bridge"]).guild:getMember(channels["bot2"]).status == "offline" then
+			return message:removeReaction(hash, userId)
+		end
+
+		local member = channel.guild:getMember(userId)
+
+		if hasPermission(permissions.is_module, member) then
+			local img = (message.attachment and message.attachment.url or nil)
+
+			if hash == reactions.x then
+				message.author:send("Hello, unfortunately your **#image-host** request has been denied. It may be inappropriate, may have copyrights or may have something wrong.\n\nOriginal post:\n\n" .. message.content .. "\n" .. (img or ""))
+				return message:delete()
+			end
+
+			local iniSettings, _, __, settings = string.find(message.content, "`(`?`?)\n?(.-)%1`$")
+
+			local content = string.sub(message.content, 1, (iniSettings or 0) - 1)
+			if img then
+				img = imageHandler.fromUrl(img)
+			end
+
+			message:delete()
+			if settings then
+				local s = { }
+				string.gsub(settings, "[^\n]+", function(setting)
+					setting = string.trim(setting)
+					local setting_wo_param = string.match(setting, "^%S+") or setting
+					s[setting_wo_param] = imageHandler.methodFlags[setting_wo_param] == 0 and "" or string.match(setting, " (.-)$")
+				end)
+
+				local imgurAuth = { "Authorization", "Client-ID " .. tokens.imgur }
+				local images = { img }
+				for link in string.gmatch(content, "[^\n]+") do
+					if string.sub(link, 1, 20) == "https://imgur.com/a/" then
+						local header, body = http.request("GET", "https://api.imgur.com/3/album/" .. string.sub(link, 21) .. "/images", { imgurAuth })
+						body = json.decode(body)
+
+						local len
+						for image = 1, (body.data and #body.data or 0) do
+							len = #images + 1
+							images[len] = imageHandler.fromUrl(body.data[image].link)
+							images[len].fromAlbum = true
+						end
+					else
+						images[#images + 1] = imageHandler.fromUrl(link)
+					end
+				end
+
+				local album = { }
+				for i = 1, #images do
+					for setting, param in next, s do
+						images[i][setting](images[i], param)
+					end
+					images[i]:apply()
+
+					if images[i].fromAlbum then
+						album[#album + 1] = images[i]
+					else
+						client:getChannel(channels["bridge"]):send({
+							content = "!upload `" .. userId .. "|" .. message.author.id .. "`",
+							file = tostring(images[i])
+						})
+					end
+				end
+
+				if #album > 0 then
+					local _, body = http.request("POST", "https://api.imgur.com/3/album", { imgurAuth })
+					local albumCode, albumHash = string.match(body, '"id":"(.-)","deletehash":"(.-)"')
+
+					local file, bin
+					for image = 1, #album do
+						file = io.open(tostring(album[image]), "rb")
+						bin = file:read("*a")
+						file:close()
+
+						_, body = http.request("POST", "https://api.imgur.com/3/image", {
+							imgurAuth,
+							{ "Content-Type", "multipart/form-data; boundary=" .. boundaries[1] }
+						}, boundaries[2] .. '\r\nContent-Disposition: form-data; name="image"\r\n\r\n' .. bin .. '\r\n' .. boundaries[2] .. '\r\nContent-Disposition: form-data; name="album"\r\n\r\n' .. albumHash .. '\r\n' .. boundaries[3])
+					end
+
+					if body then
+						client:getChannel(channels["bridge"]):send("!upload `" .. userId .. "|" .. message.author.id .. "` https://imgur.com/a/" .. albumCode)
+					end
+				end
+			else
+				local cmd = "!upload `" .. userId .. "|" .. message.author.id .. "` "
+				for link in string.gmatch(content, "[^\n]+") do
+					client:getChannel(channels["bridge"]):send(cmd .. link)
+				end
+				if img then
+					client:getChannel(channels["bridge"]):send({
+						content = cmd,
+						file = tostring(img)
+					})
+				end
+			end
+		end
+	end
+}
+channelReactionBehaviors["report"] = {
+	f_Add = function(message, channel, hash)
+		if hash == reactions.x then
+			message:delete()
+		else
+			local r_channel, r_message = string.match(message.content, "discordapp%.com/channels/%d+/(%d+)/(%d+)")
+
+			local msg = client:getChannel(r_channel):getMessage(r_message)
+			if msg then
+				local reason = string.match(message.content, "```\n(.-)```")
+				local embed = {
+					color = color.err,
+					description = message.description,
+					image = message.image,
+					footer = message.footer,
+					timestamp = message.timestamp
+				}
+				local user = "**" .. (msg.member or msg.author).name .. "** <@" .. msg.author.id .. ">"
+
+				message:setContent("") -- Bug?
+				if hash == reactions.wave then
+					msg.author:send({
+						content = "Your message was removed due to a report. Behave or you may be kicked/banned at some point.",
+						embed = embed
+					})
+
+					msg:delete()
+					message:setContent("You deleted the message sent by the user " .. user .. ". Reason:\n```\n" .. reason .. "```")
+				else
+					msg:delete()
+					if hash == reactions.boot then
+						msg.author:send({
+							content = "You got kicked from **Fifty Shades of Lua** due to a report. You can join again when you improve your behavior.",
+							embed = embed
+						})
+						if msg.member then
+							msg.member:kick(reason)
+						end
+
+						message:setContent("You kicked " .. user .. ". Reason:\n```\n" .. reason .. "```")
+					elseif hash == reactions.bomb then
+						msg.author:send({
+							content = "You got banned from **Fifty Shades of Lua** due to a report. Contact <@" .. client.owner.id .. "> to appeal or come back in 1 year.",
+							embed = embed
+						})
+						if msg.member then
+							msg.member:ban(reason, 365)
+						end
+
+						message:setContent("You banned " .. user .. " for 1 year. Reason:\n```\n" .. reason .. "```")
+					end
+				end
+				message:clearReactions()
+			end
+		end
+	end
+}
+channelReactionBehaviors["bug-report"] = {
+	f_Add = function(message, channel, hash, userId)
+		local member = channel.guild:getMember(userId)
+
+		if hash == reactions.bug or string.find(reactions.eyes2, hash) then
+			if hasPermission(permissions.is_module, member) then
+				if not userId == client.owner.id then
+					local r = message.reactions:find(function(r) return r.emojiName == hash end)
+					if not (r and r:getUsers(100):count(function(user) return hasPermission(permissions.is_module, channel.guild:getMember(user.id)) end) > 1) then return end
+				end
+
+				message:delete()
+				if hash == reactions.bug then
+					local msg = client:getChannel(channels["bug-log"]):send({
+						embed = {
+							color = color.sys,
+							description = message.content,
+							image = (message.attachment and message.attachment.url and { url = img } or nil)
+						}
+					})
+					msg:addReaction(reactions.online)
+					msg:addReaction(reactions.idle)
+					msg:addReaction(reactions.dnd)
+
+					channelReactionBehaviors["bug-log"].f_Add(msg, nil, reactions.idle, client.owner.id)
+				end
+			end
+		end
+	end
+}
+channelReactionBehaviors["bug-log"] = {
+	f_Add = function(message, _, hash, userId)
+		if userId == client.owner.id then
+			local str = "Status at " .. os.date("%x") .. ": <:"
+			if string.find(reactions.online, hash) then
+				message:setContent(str .. reactions.online .. "> Fixed!")
+			elseif string.find(reactions.idle, hash) then
+				message:setContent(str .. reactions.idle .. "> Waiting to be reported / Waiting for reply.")
+			elseif string.find(reactions.dnd, hash) then
+				message:setContent(str .. reactions.dnd .. "> Will not be fixed / Not a bug.")
+			end
+		end
+	end
+}
+
 --[[ Events ]]--
 client:on("ready", function()
 	modules = getDatabase("b_modules")
@@ -4683,6 +4761,8 @@ client:on("ready", function()
 		__index = setmetatable({
 			boundaries = boundaries,
 
+			channelCommandBehaviors = channelCommandBehaviors,
+			channelReactionBehaviors = channelReactionBehaviors,
 			client = client,
 			commands = commands,
 			currency = currency,
@@ -4713,6 +4793,7 @@ client:on("ready", function()
 			sendError = sendError,
 			setPermissions = setPermissions,
 
+			throwError = throwError,
 			tokens = tokens,
 
 			updateCurrency = updateCurrency
@@ -4727,51 +4808,224 @@ client:on("ready", function()
 	log("INFO", "Running as '" .. client.user.name .. "'", logColor.green)
 end)
 
+local globalCommandCall = function(cmd, message, parameters)
+	if cmd.category then
+		if cmd.category ~= (message.channel.category and message.channel.category.id or nil) then
+			toDelete[message.id] = message:reply({
+				content = "<@!" .. message.author.id .. ">",
+				embed = {
+					color = color.err,
+					title = "Authorization denied.",
+					description = "You can't use this command in this category."
+				}
+			})
+			return
+		end
+	elseif cmd.channel then
+		if cmd.channel ~= message.channel.id then
+			toDelete[message.id] = message:reply({
+				content = "<@!" .. message.author.id .. ">",
+				embed = {
+					color = color.err,
+					title = "Authorization denied.",
+					description = "You can't use this command in this channel."
+				}
+			})
+			return
+		end
+	end
+
+	local embed = table.copy(cmd.embed)
+
+	embed.title = base64.decode(embed.title)
+	embed.description = base64.decode(embed.description)
+	if embed.image then
+		embed.image.url = base64.decode(embed.image.url)
+	end
+
+	local msg
+	if embed.title or embed.description or embed.image then
+		msg = message:reply({
+			embed = embed
+		})
+	end
+
+	local msgs
+	if cmd.script then
+		msgs = commands["lua"].f(message, (parameters and "`\nlocal parameters = \"" .. (string.gsub(tostring(parameters), "\"", "\\\"")) .. "\"\n" or "`") .. base64.decode(cmd.script) .. "`", nil, debugAction.cmd)
+	end
+
+	if msgs then
+		if msg then
+			msgs[#msgs + 1] = msg
+		end
+		toDelete[message.id] = msgs
+	elseif msg then
+		toDelete[message.id] = msg
+	end
+end
+local messageCreate = function(message, skipChannelActivity)
+	-- Ignore its own messages
+	if message.author.id == client.user.id then return end
+
+	-- Channel behavior system (Output)
+	for k, v in next, channelCommandBehaviors do
+		if v.output and channels[k] and message.channel.id == channels[k] then
+			throwError(message, { "Command Behavior [" .. k .. "]" }, v.f, message)
+			return
+		end
+	end
+
+	-- Skips bot messages
+	if message.author.bot then return end
+
+	-- Doesn't allow private messages
+	if message.channel.type == 1 then return end
+
+	-- Channel behavior system (Input)
+	for k, v in next, channelCommandBehaviors do
+		if not v.output and channels[k] and message.channel.id == channels[k] then
+			throwError(message, { "Command Behavior [" .. k .. "]" }, v.f, message)
+			return
+		end
+	end
+
+	-- Detect prefix
+	local prefix = "!"
+	local category = message.channel.category and string.lower(message.channel.category.name) or nil
+	if category and string.sub(category, 1, 1) == "#" and modules[category].prefix then
+		prefix = modules[category].prefix
+	end
+
+	-- Detect command and parameters
+	local command, parameters = string.match(message.content, "^" .. prefix .. "(.-)[\n ]+(.*)")
+	command = command or string.match(message.content, "^" .. prefix .. "(.+)")
+
+	if not command then
+		if string.find(message.content, "L%.?U%.?A%.?") then
+			message:reply("Lua *, it's not an acronym. Noob!")
+		end
+
+		if not skipChannelActivity then
+			if not lastMemberTexting[message.channel.id] or #lastMemberTexting[message.channel.id] > 100 then
+				lastMemberTexting[message.channel.id] = { message.author.id }
+			else
+				table.insert(lastMemberTexting[message.channel.id], 1, message.author.id)
+			end
+
+			local can = 0
+			for p = 1, 3 do -- Can only message 3 times
+				if lastMemberTexting[message.channel.id][p] and lastMemberTexting[message.channel.id][p] == message.author.id then
+					can = can + 1
+				end
+			end
+
+			if can < 3 then
+				if not activeChannels[message.channel.id] then
+					activeChannels[message.channel.id] = 1
+				else
+					activeChannels[message.channel.id] = activeChannels[message.channel.id] + 1
+				end
+			end
+
+			if not memberTimers[message.author.id] then
+				memberTimers[message.author.id] = 0
+			end
+			if os.time() > memberTimers[message.author.id] then
+				memberTimers[message.author.id] = os.time() + 3
+				if not activeMembers[message.author.id] then
+					activeMembers[message.author.id] = 1
+				else
+					activeMembers[message.author.id] = activeMembers[message.author.id] + 1
+				end
+			end
+		end
+		return
+	end
+
+	command = string.lower(command)
+	parameters = (parameters and parameters ~= '') and string.trim(parameters) or nil
+
+	-- Function call
+	local botCommand, moduleCommand, cmd = true, false, commands[command]
+	if not cmd then
+		botCommand = false
+		moduleCommand = true
+		cmd = modules[category] and modules[category].commands[command] or nil
+		if not cmd then
+			moduleCommand = false
+			cmd = globalCommands[command] or nil
+		end
+	end
+
+	if cmd then
+		message.channel:broadcastTyping()
+
+		if not (authIds[message.author.id] or hasPermission(cmd.auth, message.member, message)) then
+			toDelete[message.id] = message:reply({
+				content = "<@!" .. message.author.id .. ">",
+				embed = {
+					color = color.err,
+					title = "Authorization denied.",
+					description = "You do not have access to the command `" .. (moduleCommand and (category .. ".") or '') .. command .. "`!"
+				}
+			})
+			return
+		end
+
+		if botCommand then
+			throwError(message, { "Command [" .. string.upper(command) .. "]" }, cmd.f, message, parameters, category)
+		else
+			throwError(message, { "Global Command [" .. string.upper(command) .. "]" }, globalCommandCall, cmd, message, parameters)
+		end
+	end
+end
+local messageDelete = function(message, skipChannelActivity)
+	if toDelete[message.id] then
+		local msg
+		for id = 1, #toDelete[message.id] do
+			msg = message.channel:getMessage(toDelete[message.id][id])
+			if msg then
+				msg:delete()
+			end
+		end
+
+		toDelete[message.id] = nil
+	elseif not skipChannelActivity then
+		if (os.time() - 60) < discordia.Date.fromISO(message.timestamp):toSeconds() then
+			if activeChannels[message.channel.id] and activeChannels[message.channel.id] > 0 then
+				activeChannels[message.channel.id] = activeChannels[message.channel.id] - 1
+			end
+			if activeMembers[message.author.id] and activeMembers[message.author.id] > 0 then
+				activeMembers[message.author.id] = activeMembers[message.author.id] - 1
+			end
+		end
+	end
+end
+local messageUpdate = function(message)
+	if message.channel.id == channels["bridge"] then return end
+
+	messageDelete(message, true)
+	messageCreate(message, true)
+end
 client:on("messageCreate", function(message)
 	if not modules then return end
 
-	local success, err = pcall(messageCreate, message)
-	if not success then
-		toDelete[message.id] = message:reply({
-			embed = {
-				color = color.lua_err,
-				title = "evt@MessageCreate => Fatal Error!",
-				description = "```\n" .. err .. "```"
-			}
-		})
-	end
+	throwError(message, "MessageCreate", messageCreate, message)
 end)
 client:on("messageUpdate", function(message)
 	if not modules then return end
 
-	local success, err = pcall(messageUpdate, message)
-	if not success then
-		toDelete[message.id] = message:reply({
-			embed = {
-				color = color.lua_err,
-				title = "evt@MessageUpdate => Fatal Error!",
-				description = "```\n" .. err .. "```"
-			}
-		})
-	end
+	throwError(message, "MessageUpdate", messageUpdate, message)
 end)
 client:on("messageDelete", function(message)
-	local success, err = pcall(messageDelete, message)
-	if not success then
-		toDelete[message.id] = message:reply({
-			embed = {
-				color = color.lua_err,
-				title = "evt@MessageDelete => Fatal Error!",
-				description = "```\n" .. err .. "```"
-			}
-		})
-	end
+	throwError(message, "MessageDelete", messageDelete, message)
 end)
 
-client:on("memberJoin", function(member)
+local memberJoin = function(member)
 	client:getChannel(channels["logs"]):send("<@!" .. member.id .. "> [" .. member.name .. "] just joined!")
-end)
-client:on("memberLeave", function(member)
+end
+local memberLeave = function(member)
 	client:getChannel(channels["logs"]):send("<@" .. member.id .. "> [" .. member.name .. "] just left!")
 	if activeMembers[member.id] then
 		activeMembers[member.id] = nil
@@ -4779,65 +5033,79 @@ client:on("memberLeave", function(member)
 	if staffMembers[member.id] then
 		staffMembers[member.id] = nil
 	end
+end
+client:on("memberJoin", function(member)
+	throwError(nil, "MemberJoin", memberJoin, member)
+end)
+client:on("memberLeave", function(member)
+	throwError(nil, "MemberLeave", memberLeave, member)
 end)
 
-client:on("reactionAddUncached", function(channel, messageId, hash, userId)
-	local success, err = pcall(reactionAdd, true, channel, messageId, hash, userId)
-	if not success then
-		toDelete[messageId] = channel:send({
-			embed = {
-				color = color.lua_err,
-				title = "evt@ReactionAdd => Fatal Error!",
-				description = "```\n" .. err .. "```"
-			}
-		})
+local reactionAdd = function(cached, channel, messageId, hash, userId)
+	if userId == client.user.id then return end
+
+	local message = channel:getMessage(messageId)
+	for k, v in next, channelReactionBehaviors do
+		if v.f_Add and channels[k] and channels[k] == channel.id then
+			return throwError(message, { "ReactionAdd Behavior [" .. k .. "]" }, v.f_Add, message, channel, hash, userId)
+		end
 	end
+
+	if not cached then -- last one because the above ^ can be uncached too
+		if polls[messageId] then
+			local found, answer = table.find(polls.__REACTIONS, hash)
+			if found then
+				polls[messageId].votes[answer] = polls[messageId].votes[answer] + 1
+				message:removeReaction(polls.__REACTIONS[(answer % 2) + 1], userId)
+			else
+				message:removeReaction(hash, userId)
+			end
+		end
+	end
+end
+client:on("reactionAddUncached", function(channel, messageId, hash, userId)
+	throwError(channel:getMessage(messageId), "ReactionAdd", reactionAdd, true, channel, messageId, hash, userId)
 end)
 client:on("reactionAdd", function(reaction, userId)
-	local success, err = pcall(reactionAdd, false, reaction.message.channel, reaction.message.id, reaction.emojiName, userId)
-	if not success then
-		toDelete[reaction.message.id] = reaction.message:reply({
-			embed = {
-				color = color.lua_err,
-				title = "evt@ReactionAdd => Fatal Error!",
-				description = "```\n" .. err .. "```"
-			}
-		})
-	end
+	throwError(reaction.message, "ReactionAdd", reactionAdd, false, reaction.message.channel, reaction.message.id, reaction.emojiName, userId)
 end)
 
-client:on("reactionRemoveUncached", function(channel, messageId, hash, userId)
-	local success, err = pcall(reactionRemove, true, channel, messageId, hash, userId)
-	if not success then
-		toDelete[messageId] = channel:send({
-			embed = {
-				color = color.lua_err,
-				title = "evt@ReactionRemove => Fatal Error!",
-				description = "```\n" .. err .. "```"
-			}
-		})
+local reactionRemove = function(cached, channel, messageId, hash, userId)
+	if userId == client.user.id then return end
+
+	local message = channel:getMessage(messageId)
+	for k, v in next, channelReactionBehaviors do
+		if v.f_Rem and channels[k] and channels[k] == channel.id then
+			return throwError(message, { "ReactionRem Behavior [" .. k .. "]" }, v.f_Rem, channel, message, hash, userId)
+		end
 	end
+
+	if not cached then
+		if polls[messageId] then
+			local found, answer = table.find(polls.__REACTIONS, hash)
+			if found then
+				polls[messageId].votes[answer] = polls[messageId].votes[answer] - 1
+			end
+		end
+	end
+end
+client:on("reactionRemoveUncached", function(channel, messageId, hash, userId)
+	throwError(channel:getMessage(messageId), "ReactionRemove", reactionRemove, true, channel, messageId, hash, userId)
 end)
 client:on("reactionRemove", function(reaction, userId)
-	local success, err = pcall(reactionRemove, false, reaction.message.channel, reaction.message.id, reaction.emojiName, userId)
-	if not success then
-		toDelete[reaction.message.id] = reaction.message:reply({
-			embed = {
-				color = color.lua_err,
-				title = "evt@ReactionRemove => Fatal Error!",
-				description = "```\n" .. err .. "```"
-			}
-		})
-	end
+	throwError(reaction.message, "ReactionRemove", reactionRemove, false, reaction.message.channel, reaction.message.id, reaction.emojiName, userId)
 end)
 
-client:on("channelDelete", function(channel)
+local channelDelete = function(channel)
 	if activeChannels[channel.id] then
 		activeChannels[channel.id] = nil
 	end
+end
+client:on("channelDelete", function(channel)
+	throwError(nil, "ChannelDelete", channelDelete, channel)
 end)
 
-clock:on("min", function()
+local clockMin = function()
 	if not modules then return end
 	minutes = minutes + 1
 
@@ -4882,11 +5150,16 @@ clock:on("min", function()
 			end
 		end
 	end
+end
+clock:on("min", function()
+	throwError(nil, "ClockMinute", clockMin)
 end)
-
-clock:on("hour", function()
+local clockHour = function()
 	if not modules then return end
 	updateCurrency()
+end
+clock:on("hour", function()
+	throwError(nil, "ClockHour", clockHour)
 end)
 
 client:run(os.readFile("Content/token.txt", "*l"))
