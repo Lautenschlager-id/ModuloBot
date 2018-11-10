@@ -10,7 +10,7 @@
 >|-|-|:-:|
 >| msgId | `string` \| `int` |  |
 >
->Deletes a message sent by the bot.
+>Deletes a message sent by the bot. (3 minutes tolerance)
 
 ### http(url, header, body, token)
 >| Parameter | Type | Optional |

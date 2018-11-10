@@ -6,6 +6,7 @@
 | authIds | table | User IDs with permission to access any command, anywhere.<br>*[Uses Hash] |
 | channels | table | Flags of the important channels that are used for specific behaviors in the bot. |
 | color | table | Flags for the embed colors used in the bot. |
+| reactions | table | Table of reactions used in the bot. |
 | countryFlags | table | Flags of the bytes of the flag emojis of each community in Transformice. |
 | countryFlags_Aliases | table | Flags of aliases of country codes for **countryFlags**' reference. |
 | debugAction | table | Flags for **!lua** behavior, where `test` removes the logs and `cmd` executes for non-developers |
@@ -19,6 +20,8 @@
 | envTfm | table | Transformice's Environment with empty functions |
 | ![admin_only](https://i.imgur.com/GWJg6TA.png)tokens | table | Flags for API tokens that the bot uses. |
 | ![admin_only](https://i.imgur.com/GWJg6TA.png)commands | table | All the bot commands. |
+| ![admin_only](https://i.imgur.com/GWJg6TA.png)channelCommandBehaviors | table | Bot behavior in specific channels. (IO) |
+| ![admin_only](https://i.imgur.com/GWJg6TA.png)channelReactionBehaviors | table | Bot behavior in specific channels when an reaction is added or removed. |
 | devRestrictions | table | The restrictions for the admin's environment in **!lua**. |
 | moduleRestrictions | table | The restrictions for the developers' environment in **!lua**. |
 | meta | table | Global metamethods used in many parts of the system.<br>1. **__add(tbl, new)** ~> Adds two tables. |
@@ -206,6 +209,16 @@
 >Splits a string by lines until it reaches the max size.
 >
 >**Returns:** `table`
+
+### ![admin_only](https://i.imgur.com/GWJg6TA.png)throwError(message, errName, fn, ...)
+>| Parameter | Type | Optional |
+>|-|-|:-:|
+>| message | `Discordia.Message` |  |
+>| errName | `string` \| `table` |  |
+>| fn | `function` |  |
+>| ... | `*` |  |
+>
+>Throws an error if a function doesn't load properly
 
 ### ![admin_only](https://i.imgur.com/GWJg6TA.png)updateCurrency()
 >
