@@ -2658,7 +2658,7 @@ commands["topic"] = {
 				if body then
 					-- Two matches because Lua sucks
 					local commu, section, title = string.match(body, '<a href="section%?f=%d+&s=%d+" class=" ">.-<img src="/img/pays/(..)%.png".-/> (.-) +</a>.-class=" active">(.-) </a> +</li> +</ul> +<div')
-					local avatar, timestamp, playerCommu, playerName, playerDiscriminator, msg = string.match(body, '<div id="m' .. code .. '".-<img src="(http://avatars%.atelier801%.com/.-)".-data%-afficher%-secondes="false">(%d+)</span>.-<img src="/img/pays/(..)%.png".-(%S+)<span class="nav%-header%-hashtag">(#%d+).-#' .. code .. '</a>.-id="message_%d+">(.-)</div> +</div> +</div> +</td> +</tr> +</table>')
+					local avatar, timestamp, playerCommu, playerName, playerDiscriminator, msg = string.match(body, '<div id="m' .. code .. '".-<img src="(http://avatars%.atelier801%.com/.-)".-data%-afficher%-secondes="false">(%d+)</span>.-<img src="/img/pays/(..)%.png".-(%S+)<span class="nav%-header%-hashtag">(#%d+).-#' .. code .. '</a>.-id="message_%d+">(.-)</div> +</div>')
 
 					if commu then
 						local internationalFlag = "<:international:458411936892190720>"
