@@ -2688,24 +2688,34 @@ commands["word"] = {
 			local language, content = string.match(parameters, "(%S+)[ \n]+(.+)$")
 			if language and content and #content > 0 then
 				language = string.lower(language)
-				content = string.sub(content, 1, 100)
+				local sourceLanguage, targetLanguage = string.match(language, "^(..)[%-~]>?(..)$")
+				if not sourceLanguage then
+					sourceLanguage = "auto"
+					targetLanguage = language
+				end
 
-				local head, body = http.request("GET", "https://translate.yandex.net/api/v1.5/tr.json/translate?key=trnsl.1.1.20180406T014324Z.87adf2b8b3335e7c.212f70178f4e714754506277683f3b2cf308c272&text=" .. encodeUrl(content) .. "&lang=" .. language .. (string.find(language, "%-") and '' or "&options=1"))
+				content = string.sub(content, 1, 250)
+				local head, body = http.request("GET", "https://translate.googleapis.com/translate_a/single?client=gtx&sl=" .. sourceLanguage .. "&tl=" .. targetLanguage .. "&dt=t&q=" .. encodeUrl(content))
 				body = json.decode(tostring(body))
 
-				if body and body.text then
-					body.lang = string.lower(body.lang)
-					local from, to = string.match(body.lang, "(.-)%-(.+)")
+				if #body > 0 then
+					sourceLanguage = string.upper((sourceLanguage == "auto" and tostring(body[3]) or sourceLanguage))
+					targetLanguage = string.upper(targetLanguage)
 
-					from, to = string.upper(from), string.upper(to)
+					sourceLanguage = countryFlags_Aliases[sourceLanguage] or sourceLanguage
+					targetLanguage = countryFlags_Aliases[targetLanguage] or targetLanguage
 
 					toDelete[message.id] = message:reply({
 						embed = {
 							color = color.interaction,
 							title = ":earth_americas: Quick Translation",
-							description = (countryFlags[from] or '') .. "@**" .. from .. "**\n```\n" .. content .. "```" .. (countryFlags[to] or '') .. "@**" .. to .. "**\n```\n" .. table.concat(body.text, "\n") .. "```"
+							description = (countryFlags[countryFlags_Aliases[sourceLanguage] or sourceLanguage] or "") .. "@**" .. sourceLanguage .. "**\n```\n" .. content .. "```" .. (countryFlags[countryFlags_Aliases[targetLanguage] or targetLanguage] or "") .. "@**" .. string.upper(targetLanguage) .. "**\n```\n" .. concat(body[1], ' ', function(index, value)
+								return value[1]
+							end) .. "```"
 						}
 					})
+				else
+					sendError(message, "WORD", "Internal Error.", "Couldn't translate ```\n" .. parameters .. "```")
 				end
 			else
 				sendError(message, "WORD", "Invalid parameters.", syntax)
