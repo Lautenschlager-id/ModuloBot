@@ -1236,6 +1236,40 @@ local hasPermission = function(permission, member, message)
 		end)
 	end
 end
+--[[Doc
+	"Converts HTML to Discord Markdown"
+	@str string
+	>string
+]]
+local htmlToMarkdown = function(str)
+    str = string.gsub(str, "&#(%d+);", function(dec) return string.char(dec) end)
+    str = string.gsub(str, '<span style="(.-);">(.-)</span>', function(x, content)
+        local markdown = ""
+        if x == "font-weight:bold" then
+            markdown = "**"
+        elseif x == "font-style:italic" then
+            markdown = '_'
+        elseif x == "text-decoration:underline" then
+            markdown = "__"
+        elseif x == "text-decoration:line-through" then
+            markdown = "~~"
+        end
+        return markdown .. content .. markdown
+    end)
+    str = string.gsub(str, '<p style="text-align:.-;">(.-)</p>', "%1")
+    str = string.gsub(str, '<blockquote.->(.-)<div>(.-)</div></blockquote>', function(name, content)
+		local m = string.match(name, "<small>(.-)</small>")
+        return (m and ("`" .. m .. "`\n") or "") .. "```\n" .. (#content > 50 and string.sub(content, 1, 50) .. "..." or content) .. "```"
+    end)
+    str = string.gsub(str, '<a href="(.-)".->(.-)</a>', "[%2](%1)")
+    str = string.gsub(str, "<br />", "\n")
+    str = string.gsub(str, "&gt;", '>')
+    str = string.gsub(str, "&lt;", '<')
+    str = string.gsub(str, "&quot;", "\"")
+    str = string.gsub(str, "&laquo;", '«')
+    str = string.gsub(str, "&raquo;", '»')
+    return str
+end
 
 --[[Doc
 	~
@@ -1512,6 +1546,7 @@ local getLuaEnv = function()
 		globalCommands = table.deepcopy(globalCommands),
 
 		hasPermission = hasPermission,
+		htmlToMarkdown = htmlToMarkdown,
 
 		logColor = table.copy(logColor),
 
@@ -1813,7 +1848,7 @@ commands["avatar"] = {
 	auth = permissions.public,
 	description = "Displays someone's avatar.",
 	f = function(message, parameters)
-		parameters = not parameters and message.author.id or string.match(parameters, "<@!?(%d+)>")
+		parameters = not parameters and message.author.id or string.match(parameters, "(%d+)")
 		parameters = parameters and client:getUser(parameters)
 
 		if parameters then
@@ -1887,6 +1922,9 @@ commands["color"] = {
 	f = function(message, parameters)
 		if parameters and #parameters > 0 then
 			local hex = string.match(parameters, "^0x(%x+)$") or string.match(parameters, "^#?(%x+)$")
+			if tonumber(hex) and #hex > 6 then
+				hex = nil
+			end
 			if not hex then
 				if string.find(parameters, ',') then
 					local m = "(%d+), *(%d+), *(%d+)"
@@ -1902,7 +1940,10 @@ commands["color"] = {
 						parameters = string.format("%02x%02x%02x", r, g, b)
 					end
 				else
-					parameters = nil
+					parameters = string.match(parameters, "^(%d+)$")
+					if parameters then
+						parameters = string.format("%06x", parameters)
+					end
 				end
 			else
 				parameters = hex
@@ -2596,6 +2637,62 @@ commands["serverinfo"] = {
 				},
 			}
 		})
+	end
+}
+commands["topic"] = {
+	auth = permissions.public,
+	description = "Displays a forum message.",
+	f = function(message, parameters)
+		local syntax = "Use `!topic https://atelier801.com/topic`"
+
+		if parameters and #parameters > 0 then
+			if not string.find(parameters, "https://atelier801%.com/topic") then
+				return sendError(message, "TOPIC", "Invalid parameters.", "You must insert an atelier801's url as parameter.\n" .. syntax)
+			end
+
+			local code = string.match(parameters, "(%d+)$")
+			if code then
+				local head, body = http.request("GET", parameters, {
+					{ "Accept-Language", "en-US,en;q=0.9" }
+				})
+				if body then
+					-- Two matches because Lua sucks
+					local commu, section, title = string.match(body, '<a href="section%?f=%d+&s=%d+" class=" ">.-<img src="/img/pays/(..)%.png".-/> (.-) +</a>.-class=" active">(.-) </a> +</li> +</ul> +<div')
+					local avatar, timestamp, playerCommu, playerName, playerDiscriminator, msg = string.match(body, '<div id="m' .. code .. '".-<img src="(http://avatars%.atelier801%.com/.-)".-data%-afficher%-secondes="false">(%d+)</span>.-<img src="/img/pays/(..)%.png".-(%S+)<span class="nav%-header%-hashtag">(#%d+).-#' .. code .. '</a>.-id="message_%d+">(.-)</div> +</div> +</div> +</td> +</tr> +</table>')
+
+					if commu then
+						local internationalFlag = "<:international:458411936892190720>"
+						playerName = playerName .. playerDiscriminator
+						toDelete[message.id] = message:reply({
+							embed = {
+								color = color.interaction,
+								title = (countryFlags[string.upper(commu)] or internationalFlag) .. " " .. section .. " / " .. string.gsub(title, "<.->", ''),
+								fields = {
+									[1] = {
+										name = "Author",
+										value = (countryFlags[string.upper(playerCommu)] or internationalFlag) .. " [" .. normalizeDiscriminator(playerName) .. "](https://atelier801.com/profile?pr=" .. encodeUrl(playerName) .. ")",
+										inline = false
+									},
+									[2] = {
+										name = "Message #" .. code,
+										value = htmlToMarkdown(string.sub(msg, 1, 1000)),
+										inline = false
+									},
+								},
+								thumbnail = { url = avatar },
+								timestamp = discordia.Date().fromMilliseconds(timestamp):toISO()
+							}
+						})
+					end
+				else
+					return sendError(message, "TOPIC", "Internal Error", "Try again later.")
+				end
+			else
+				return sendError(message, "TOPIC", "Message code not found.", "You must insert an atelier801's url as parameter, with section, page, topic and message. Example: `topic?f=0&t=000000&p=000#m0000`.\n" .. syntax)
+			end
+		else
+			return sendError(message, "TOPIC", "Invalid or missing parameters.", syntax)
+		end
 	end
 }
 commands["tree"] = {
