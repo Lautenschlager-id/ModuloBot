@@ -125,6 +125,15 @@
 >
 >**Returns:** `boolean` | `nil`
 
+### htmlToMarkdown(str)
+>| Parameter | Type | Optional |
+>|-|-|:-:|
+>| str | `string` |  |
+>
+>Converts HTML to Discord Markdown
+>
+>**Returns:** `string`
+
 ### ![admin_only](https://i.imgur.com/GWJg6TA.png)log(category, text, color)
 >| Parameter | Type | Optional |
 >|-|-|:-:|
