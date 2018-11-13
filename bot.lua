@@ -1262,12 +1262,17 @@ local htmlToMarkdown = function(str)
         return (m and ("`" .. m .. "`\n") or "") .. "```\n" .. (#content > 50 and string.sub(content, 1, 50) .. "..." or content) .. "```"
     end)
     str = string.gsub(str, '<a href="(.-)".->(.-)</a>', "[%2](%1)")
-    str = string.gsub(str, "<br />", "\n")
+    str = string.gsub(str, "<br ?/?>", "\n")
     str = string.gsub(str, "&gt;", '>')
     str = string.gsub(str, "&lt;", '<')
     str = string.gsub(str, "&quot;", "\"")
     str = string.gsub(str, "&laquo;", '«')
     str = string.gsub(str, "&raquo;", '»')
+	str = string.gsub(str, '<div class="cadre cadre%-code">(.-)<div class="contenu.-<pre class="colonne%-lignes%-code">(.-)</pre></div></div>', function(language, code)
+		language = string.match(language, '<div class="indication%-langage%-code">(.-) code</div><hr/>') or ''
+		code = string.gsub(code, "<span .->(.-)</span>", "%1")
+		return "```" .. language .. "\n" .. code .. "```"
+	end)
     return str
 end
 
@@ -2663,6 +2668,8 @@ commands["topic"] = {
 					if commu then
 						local internationalFlag = "<:international:458411936892190720>"
 						playerName = playerName .. playerDiscriminator
+
+						msg = string.sub(htmlToMarkdown(msg), 1, 1000)
 						toDelete[message.id] = message:reply({
 							embed = {
 								color = color.interaction,
@@ -2675,7 +2682,7 @@ commands["topic"] = {
 									},
 									[2] = {
 										name = "Message #" .. code,
-										value = htmlToMarkdown(string.sub(msg, 1, 1000)),
+										value = msg .. (string.count(msg, "```") % 2 ~= 0 and "```" or ""),
 										inline = false
 									},
 								},
