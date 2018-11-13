@@ -1,4 +1,14 @@
 ## Static Methods
+### count(str, s)
+>| Parameter | Type | Optional |
+>|-|-|:-:|
+>| str | `string` |  |
+>| s | `string` |  |
+>
+>Counts how many ocurrencies of a pattern or string appears in another string.
+>
+>**Returns:** `int`
+
 ### nickname(s)
 >| Parameter | Type | Optional |
 >|-|-|:-:|
