@@ -30,6 +30,16 @@ os.readFile = function(file, format)
 end
 
 --[[Doc
+	"Counts how many ocurrencies of a pattern or string appears in another string."
+	@str string
+	@s string
+	>int
+]]
+string.count = function(str, s)
+	local _, count = string.gsub(str, s, '')
+	return count
+end
+--[[Doc
 	"Normalizes a Transformice's nickname (Xxxx)."
 	@s string
 	>string
