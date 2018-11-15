@@ -2644,6 +2644,47 @@ commands["serverinfo"] = {
 		})
 	end
 }
+commands["tfmprofile"] = {
+	auth = permissions.public,
+	description = "Displays your profile on Transformice.",
+	f = function(message, parameters)
+		if parameters and #parameters > 2 then
+			parameters = string.gsub(string.nickname(parameters), "#0000", '')
+			local head, body = http.request("GET", "https://club-mice.com/yuir_lacasitos/api.php?user=" .. encodeUrl(parameters))
+			body = json.decode(body)
+
+			if body then
+				if not body.id then 
+					return sendError(message, "TFMPROFILE", "Player '" .. parameters .. "' not found.")
+				end
+
+				if not body.title then
+					body.title = "«Little Mouse»"
+				else
+					body.title = string.gsub(body.title, "&amp;", '&')
+					body.title = string.gsub(body.title, "\\u00ab", '«')
+					body.title = string.gsub(body.title, "\\u00bb", '»')
+				end
+
+				local lvl, remain, need = http.request("GET", "https://raw.githubusercontent.com/Squalleze/Lua/master/Level.lua")
+				lvl, remain, need = load(remain .. "\nreturn lvl.exp(" .. body.experience .. ")")()
+
+				toDelete[message.id] = message:reply({
+					embed = {
+						color = color.atelier801,
+						title = "<:tfm_cheese:458404666926039053> Transformice Profile - " .. parameters .. (body.gender == "Male" and " <:male:456193580155928588>" or body.gende == "Female" and " <:female:456193579308679169>" or ""),
+						description = (body.registration_date == "" and "" or (":calendar: " .. body.registration_date .. "\n\n")) .. "**Level " .. body.level .. "** " .. getRate(math.percent(remain, (remain + need)), 100, 5) .. (body.tribe and ("\n<:tribe:458407729736974357> **Tribe :** " .. body.tribe) or "") .. "\n```\n" .. body.title .. "```\n<:shaman:512015935989612544> " .. body.saved_mice .. " / " .. body.saved_mice_hard .. " / " .. body.saved_mice_divine .. "\n<:tfm_cheese:458404666926039053> **Shaman cheese :** " .. body.shaman_cheese .. "\n\n<:racing:512016668038266890> **Firsts :** " .. body.first .. " " .. getRate(math.percent(body.first, body.round_played, 100), 100, 5) .. "\n<:tfm_cheese:458404666926039053> **Cheeses: ** " .. body.cheese_gathered .. " " .. getRate(math.percent(body.cheese_gathered, body.round_played, 100), 100, 5) .. "\n\n<:bootcamp:512017071031451654> **Bootcamps :** " .. body.bootcamp .. (body.spouse and("\n\n:revolving_hearts: **" .. normalizeDiscriminator(body.spouse) .. (body.marriage_date and ("** since **" .. body.marriage_date .. "**") or "**")) or ""),
+						thumbnail = { url = body.avatar }
+					}
+				})
+			else 
+				return sendError(message, "TFMPROFILE", "Internal Error.", "Try again later.")
+			end
+		else 
+			return sendError(message, "TFMPROFILE", "Invalid or missing parameters.", "Use `!tfmprofile Playername`")
+		end
+	end
+}
 commands["topic"] = {
 	auth = permissions.public,
 	description = "Displays a forum message.",
@@ -4966,7 +5007,7 @@ local globalCommandCall = function(cmd, message, parameters)
 
 	local msgs
 	if cmd.script then
-		msgs = commands["lua"].f(message, (parameters and "`\nlocal parameters = \"" .. (string.gsub(tostring(parameters), "\"", "\\\"")) .. "\"\n" or "`") .. base64.decode(cmd.script) .. "`", nil, debugAction.cmd)
+		msgs = commands["lua"].f(message, (parameters and ("`\nlocal parameters = \"" .. (string.gsub(parameters, "\"", "\\\"")) .. "\"\n") or "`") .. base64.decode(cmd.script) .. "`", nil, debugAction.cmd)
 	end
 
 	if msgs then
