@@ -131,7 +131,8 @@ local reactions = {
 	eyes2 = "eyes2:499367166299340820",
 	online = "online:456197711356755980",
 	idle = "idle:456197711830581249",
-	dnd = "dnd:456197711251636235"
+	dnd = "dnd:456197711251636235",
+	offline = "offline:456197711457419276"
 }
 --[[Doc
 	"Flags of the bytes of the flag emojis of each community in Transformice."
@@ -842,14 +843,15 @@ local tokens = {
 	fixer = os.readFile("Content/fixer_token.txt", "*l"),
 	mashape = os.readFile("Content/mashape_token.txt", "*l"),
 	openweather = os.readFile("Content/openweathermap_token.txt", "*l"),
-	imgur = os.readFile("Content/imgur_token.txt", "*l"),
+	imgur = os.readFile("Content/imgur_token.txt", "*l")
 }
 local token_whitelist = {
 	miceclan = "http://miceclan%.com/",
 	fixer = "http://data%.fixer%.io/",
 	mashape = "https://.-%.p%.mashape%.com",
 	openweather = "http://api%.openweathermap%.org/",
-	imgur = "https://i?%.?imgur.com/"
+	imgur = "https://i?%.?imgur.com/",
+	math = "https://math%.p%.mashape%.com/image"
 }
 
 --[[ System ]]--
@@ -1096,6 +1098,27 @@ local encodeUrl = function(url)
 	end)
 
 	return '%' .. table.concat(out, '%')
+end
+--[[Doc
+	"Transforms Shaman Experience into Level, also the remaining experience and how many is needed for the next level."
+	@xp string
+	>int, int, int
+]]
+local expToLvl = function(xp)
+	local last, total, level, remain, need = 30, 0, 0, 0, 0
+	for i = 1, 200 do
+		local nlast = last + (i - 1) * ((i >= 1 and i <= 30) and 2 or (i <= 60 and 10 or (i <= 200 and 15 or 15)))
+		local ntotal = total + nlast
+
+		if ntotal >= xp then
+			level, remain, need = i - 1, xp - total, ntotal - xp
+			break
+		else
+			last, total = nlast, ntotal
+		end
+	end
+
+	return level, remain, need
 end
 
 --[[Doc
@@ -1543,6 +1566,7 @@ local getLuaEnv = function()
 
 		encodeUrl = encodeUrl,
 		envTfm = table.deepcopy(envTfm),
+		expToLvl = expToLvl,
 
 		getAge = getAge,
 		getCommandFormat = getCommandFormat,
@@ -2644,6 +2668,23 @@ commands["serverinfo"] = {
 		})
 	end
 }
+commands["tex"] = {
+	auth = permissions.public,
+	description = "Displays a mathematical formula using LaTex syntax.",
+	f = function(message, parameters)
+		if parameters and #parameters > 0 then
+			local head, body = http.request("POST", "http://quicklatex.com/latex3.f", nil, "formula=" .. encodeUrl(parameters) .. "&fsize=21px&fcolor=c2c2c2&out=1&preamble=\\usepackage{amsmath}\n\\usepackage{amsfonts}\n\\usepackage{amssymb}")
+			body = string.match(body, "(http%S+)")
+			if body then
+				toDelete[message.id] = message:reply({ file = tostring(imageHandler.fromUrl(body)) })
+			else
+				sendError(message, "TEX", "Internal Error.", "Try again later.")
+			end
+		else
+			sendError(message, "TEX", "Invalid or missing parameters.", "Use `!tex latex_formula`.")
+		end
+	end
+}
 commands["tfmprofile"] = {
 	auth = permissions.public,
 	description = "Displays your profile on Transformice.",
@@ -2666,8 +2707,7 @@ commands["tfmprofile"] = {
 					body.title = string.gsub(body.title, "\\u00bb", '»')
 				end
 
-				local lvl, remain, need = http.request("GET", "https://raw.githubusercontent.com/Squalleze/Lua/master/Level.lua")
-				lvl, remain, need = load(remain .. "\nreturn lvl.exp(" .. body.experience .. ")")()
+				local _, remain, need = expToLvl(tonumber(body.experience))
 
 				toDelete[message.id] = message:reply({
 					embed = {
@@ -3275,6 +3315,33 @@ commands["evt"] = {
 		end
 	end
 }
+commands["pin"] = {
+	auth = permissions.is_evt,
+	description = "Pins or Unpins a message in an #evt channel.",
+	f = function(message, parameters, category)
+		if not string.find(string.lower(message.channel.name), "^evt_") then
+			return sendError(message, "PIN", "This command cannot be used in this channel.")
+		end
+
+		local syntax = "Use `!pin message_id`."
+
+		if parameters and #parameters > 0 then
+			local msg = message.channel:getMessage(parameters)
+			if msg then
+				if msg.pinned then
+					msg:unpin()
+				else
+					msg:pin()
+				end
+				message:delete()
+			else
+				sendError(message, "PIN", "Message not found.", "Use a valid message id on this channel.\n" .. syntax)
+			end
+		else
+			sendError(message, "PIN", "Invalid or missing parameters.", syntax)
+		end
+	end
+}
 	-- Developer
 commands["lua"] = {
 	auth = permissions.is_dev,
@@ -3777,7 +3844,7 @@ commands["delgcmd"] = {
 
 			if command then
 				command = string.lower(command)
-				if globalCommands[command] and globalCommands[command].author == message.author.id then
+				if globalCommands[command] and (globalCommands[command].author == message.author.id or authIds[message.author.id]) then
 					globalCommands[command] = nil
 
 					save("b_gcommands", globalCommands)
@@ -3876,9 +3943,11 @@ commands["gcmd"] = {
 							if command then
 								command = string.lower(command)
 
+								if commands[command] then
+									return sendError(message, "GCMD", "This command already exists and is not global.")
+								end
 								if globalCommands[command] and globalCommands[command].author ~= message.author.id then
-									sendError(message, "GCMD", "This command already exists. Ask <@" .. globalCommands[command].author .. "> for an edition.")
-									return
+									return sendError(message, "GCMD", "This command already exists.", "Ask the owner, <@" .. globalCommands[command].author .. ">, for an edition.")
 								end
 
 								local cmd = getCommandTable(message, script, content, title, description)
@@ -4832,7 +4901,7 @@ channelReactionBehaviors["bug-report"] = {
 
 		if hash == reactions.bug or string.find(reactions.eyes2, hash) then
 			if hasPermission(permissions.is_module, member) then
-				if not userId == client.owner.id then
+				if not authIds[userId] then
 					local r = message.reactions:find(function(r) return r.emojiName == hash end)
 					if not (r and r:getUsers(100):count(function(user) return hasPermission(permissions.is_module, channel.guild:getMember(user.id)) end) > 1) then return end
 				end
@@ -4849,8 +4918,9 @@ channelReactionBehaviors["bug-report"] = {
 					msg:addReaction(reactions.online)
 					msg:addReaction(reactions.idle)
 					msg:addReaction(reactions.dnd)
+					msg:addReaction(reactions.offline)
 
-					channelReactionBehaviors["bug-log"].f_Add(msg, nil, reactions.idle, client.owner.id)
+					channelReactionBehaviors["bug-log"].f_Add(msg, nil, reactions.offline, client.owner.id)
 				end
 			end
 		end
@@ -4858,14 +4928,16 @@ channelReactionBehaviors["bug-report"] = {
 }
 channelReactionBehaviors["bug-log"] = {
 	f_Add = function(message, _, hash, userId)
-		if userId == client.owner.id then
+		if authIds[userId] then
 			local str = "Status at " .. os.date("%x") .. ": <:"
 			if string.find(reactions.online, hash) then
 				message:setContent(str .. reactions.online .. "> Fixed!")
 			elseif string.find(reactions.idle, hash) then
-				message:setContent(str .. reactions.idle .. "> Waiting to be reported / Waiting for reply.")
+				message:setContent(str .. reactions.idle .. "> Will be fixed soon.")
 			elseif string.find(reactions.dnd, hash) then
 				message:setContent(str .. reactions.dnd .. "> Will not be fixed / Not a bug.")
+			elseif string.find(reactions.offline, hash) then
+				message:setContent(str .. reactions.offline .. "> Waiting to be reported / Waiting for reply.")
 			end
 		end
 	end
@@ -4960,6 +5032,11 @@ client:on("ready", function()
 
 	clock:start()
 
+	-- Check for new messages in the bridge
+	for message in client:getChannel(channels["bridge"]):getMessages():iter() do
+		client:emit("messageCreate", message)
+	end
+
 	log("INFO", "Running as '" .. client.user.name .. "'", logColor.green)
 end)
 
@@ -5007,7 +5084,7 @@ local globalCommandCall = function(cmd, message, parameters)
 
 	local msgs
 	if cmd.script then
-		msgs = commands["lua"].f(message, (parameters and ("`\nlocal parameters = \"" .. (string.gsub(parameters, "\"", "\\\"")) .. "\"\n") or "`") .. base64.decode(cmd.script) .. "`", nil, debugAction.cmd)
+		msgs = commands["lua"].f(message, (parameters and ("`\nlocal parameters=" .. string.format("%q", parameters) .. "\n") or "`") .. base64.decode(cmd.script) .. "`", nil, debugAction.cmd)
 	end
 
 	if msgs then
