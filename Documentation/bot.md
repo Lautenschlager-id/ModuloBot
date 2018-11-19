@@ -66,6 +66,13 @@
 >
 >**Returns:** `string`
 
+### expToLvl(xp)
+>| Parameter | Type | Optional |
+>|-|-|:-:|
+>| xp | `string` |  |
+>
+>Transforms Shaman Experience into Level, also the remaining experience and how many is needed for the next level.
+
 ### getAge(date)
 >| Parameter | Type | Optional |
 >|-|-|:-:|
