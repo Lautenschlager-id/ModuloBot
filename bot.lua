@@ -1094,7 +1094,7 @@ local encodeUrl = function(url)
 	local out = {}
 
 	string.gsub(url, '.', function(letter)
-		out[#out + 1] = string.upper(string.format("%x", string.byte(letter)))
+		out[#out + 1] = string.upper(string.format("%02x", string.byte(letter)))
 	end)
 
 	return '%' .. table.concat(out, '%')
@@ -3346,7 +3346,7 @@ commands["pin"] = {
 commands["lua"] = {
 	auth = permissions.is_dev,
 	description = "Runs Lua.",
-	f = function(message, parameters, _, isTest)
+	f = function(message, parameters, _, isTest, compEnv)
 		local syntax = "Use `!lua ```code``` `."
 
 		if parameters and #parameters > 2 then
@@ -3369,6 +3369,9 @@ commands["lua"] = {
 			local repliedMessages = {}
 
 			local ENV = (hasAuth and devENV or moduleENV) + getLuaEnv()
+			if compEnv then
+				ENV = ENV + compEnv
+			end
 			ENV.discord = { }
 
 			--[[Doc
@@ -3440,7 +3443,11 @@ commands["lua"] = {
 					end
 				end
 
-				return http.request("GET", url, header, body)
+				local isPost = not not string.find(url, "^!")
+				if isPost then
+					url = string.sub(url, 2)
+				end
+				return http.request((isPost and "POST" or "GET"), url, header, body)
 			end
 			--[[Doc
 				"Sends a message in the channel."
@@ -5084,7 +5091,7 @@ local globalCommandCall = function(cmd, message, parameters)
 
 	local msgs
 	if cmd.script then
-		msgs = commands["lua"].f(message, (parameters and ("`\nlocal parameters=" .. string.format("%q", parameters) .. "\n") or "`") .. base64.decode(cmd.script) .. "`", nil, debugAction.cmd)
+		msgs = commands["lua"].f(message, "`" .. base64.decode(cmd.script) .. "`", nil, debugAction.cmd, { parameters = parameters })
 	end
 
 	if msgs then
