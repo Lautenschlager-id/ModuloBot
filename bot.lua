@@ -5159,7 +5159,7 @@ local messageCreate = function(message, skipChannelActivity)
 				end
 			end
 
-			if can < 3 then
+			if can < 3 and not string.find(message.channel.name, "^evt_") then
 				if not activeChannels[message.channel.id] then
 					activeChannels[message.channel.id] = 1
 				else
