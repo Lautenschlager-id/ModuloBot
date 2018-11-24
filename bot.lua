@@ -1017,7 +1017,7 @@ do
 		status = {
 			type = "string",
 			min = 3,
-			max = 60,
+			max = 125,
 			description = "A phrase."
 		},
 		gender = {
@@ -2699,7 +2699,7 @@ commands["tex"] = {
 	description = "Displays a mathematical formula using LaTex syntax.",
 	f = function(message, parameters)
 		if parameters and #parameters > 0 then
-			local head, body = http.request("POST", "http://quicklatex.com/latex3.f", nil, "formula=" .. encodeUrl(parameters) .. "&fsize=21px&fcolor=c2c2c2&out=1&preamble=\\usepackage{amsmath}\n\\usepackage{amsfonts}\n\\usepackage{amssymb}")
+			local head, body = http.request("POST", "http://quicklatex.com/latex3.f", nil, "formula=" .. encodeUrl("\\displaystyle " .. parameters) .. "&fsize=21px&fcolor=c2c2c2&out=1&preamble=\\usepackage{amsmath}\n\\usepackage{amsfonts}\n\\usepackage{amssymb}")
 			body = string.match(body, "(http%S+)")
 			if body then
 				toDelete[message.id] = message:reply({ file = tostring(imageHandler.fromUrl(body)) })
@@ -2893,7 +2893,7 @@ commands["word"] = {
 	auth = permissions.public,
 	description = "Translates a sentence using Google Translate. Professional translations: https://discord.gg/mMre2Dz",
 	f = function(message, parameters)
-		local syntax = "Use `!word from_language-to_language sentence`."
+		local syntax = "Use `!word [from_language-]to_language sentence`."
 
 		if parameters and #parameters > 0 then
 			local language, content = string.match(parameters, "(%S+)[ \n]+(.+)$")
@@ -2941,7 +2941,7 @@ commands["edit"] = {
 	auth = permissions.has_power,
 	description = "Edits the data of your profile.",
 	f = function(message, parameters)
-		local syntax = "Use `!edit field value` or `!edut field` to remove the value.\nThe available fields are:\n" .. concat(profileStruct, '', function(index, value)
+		local syntax = "Use `!edit field value` or `!edit field` to remove the value.\nThe available fields are:\n" .. concat(profileStruct, '', function(index, value)
 			if not value.index then
 				return "**" .. index .. "** - " .. value.description .. "\n"
 			else
