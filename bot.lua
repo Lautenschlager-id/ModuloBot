@@ -150,6 +150,7 @@ local countryFlags = {
 	ES = "\xF0\x9F\x87\xAA\xF0\x9F\x87\xB8",
 	FI = "\xF0\x9F\x87\xAB\xF0\x9F\x87\xAE",
 	FR = "\xF0\x9F\x87\xAB\xF0\x9F\x87\xB7",
+	GR = "\xF0\x9F\x87\xAC\xF0\x9F\x87\xB7",
 	HE = "\xF0\x9F\x87\xAE\xF0\x9F\x87\xB1",
 	HR = "\xF0\x9F\x87\xAD\xF0\x9F\x87\xB7",
 	HU = "\xF0\x9F\x87\xAD\xF0\x9F\x87\xBA",
@@ -2770,29 +2771,47 @@ commands["topic"] = {
 				if body then
 					-- Two matches because Lua sucks
 					local commu, section, title = string.match(body, '<a href="section%?f=%d+&s=%d+" class=" ">.-<img src="/img/pays/(..)%.png".-/> (.-) +</a>.-class=" active">(.-) </a> +</li> +</ul> +<div')
-					local avatar, timestamp, playerCommu, playerName, playerDiscriminator, msg = string.match(body, '<div id="m' .. code .. '".-<img src="(http://avatars%.atelier801%.com/.-)".-data%-afficher%-secondes="false">(%d+)</span>.-<img src="/img/pays/(..)%.png".-(%S+)<span class="nav%-header%-hashtag">(#%d+).-#' .. code .. '</a>.-id="message_%d+">(.-)</div> +</div>')
+					
+					local avatarImg = '.-<img src="(http://avatars%.atelier801%.com/.-)"'
+					local toMatch = { '<div id="m' .. code .. '"', '.-data%-afficher%-secondes="false">(%d+)</span>.-<img src="/img/pays/(..)%.png".-(%S+)<span class="nav%-header%-hashtag">(#%d+).-#' .. code .. '</a>.-<span class="coeur".-(%d+).-id="message_%d+">(.-)</div> +</div>' }
+
+					local avatar, timestamp, playerCommu, playerName, playerDiscriminator, heart, msg = string.match(body, toMatch[1] .. avatarImg .. toMatch[2])
+					if not avatar then
+						avatar = "https://i.imgur.com/Lvlrhot.png"
+						timestamp, playerCommu, playerName, playerDiscriminator, heart, msg = string.match(body, toMatch[1] .. toMatch[2])
+					end
 
 					if commu then
 						local internationalFlag = "<:international:458411936892190720>"
 						playerName = playerName .. playerDiscriminator
 
 						msg = string.sub(htmlToMarkdown(msg), 1, 1000)
+						local fields = {
+							[1] = {
+								name = "Author",
+								value = (countryFlags[string.upper(playerCommu)] or internationalFlag) .. " [" .. normalizeDiscriminator(playerName) .. "](https://atelier801.com/profile?pr=" .. encodeUrl(playerName) .. ")",
+								inline = true
+							},
+							[2] = {
+								name = "Message #" .. code,
+								value = msg .. (string.count(msg, "```") % 2 ~= 0 and "```" or ""),
+								inline = false
+							},
+						}
+						if heart ~= '0' then
+							fields[3] = fields[2]
+							fields[2] = {
+								name = "Prestige",
+								value = ":heart: " .. heart,
+								inline = true
+							}
+						end
+
 						toDelete[message.id] = message:reply({
 							embed = {
 								color = color.interaction,
 								title = (countryFlags[string.upper(commu)] or internationalFlag) .. " " .. section .. " / " .. string.gsub(title, "<.->", ''),
-								fields = {
-									[1] = {
-										name = "Author",
-										value = (countryFlags[string.upper(playerCommu)] or internationalFlag) .. " [" .. normalizeDiscriminator(playerName) .. "](https://atelier801.com/profile?pr=" .. encodeUrl(playerName) .. ")",
-										inline = false
-									},
-									[2] = {
-										name = "Message #" .. code,
-										value = msg .. (string.count(msg, "```") % 2 ~= 0 and "```" or ""),
-										inline = false
-									},
-								},
+								fields = fields,
 								thumbnail = { url = avatar },
 								timestamp = discordia.Date().fromMilliseconds(timestamp):toISO()
 							}
@@ -4247,7 +4266,7 @@ commands["commu"] = {
 				local role = message.guild:createRole(parameters)
 
 				local botRole = message.guild:getRole(roles["module member"]) -- MT
-				role:moveUp(botRole.position - 8)
+				role:moveUp(botRole.position - #roleFlags - 2)
 
 				local channel = message.guild:createTextChannel(parameters)
 				channel:setCategory("472948887230087178") -- category Community
@@ -4935,7 +4954,7 @@ channelReactionBehaviors["report"] = {
 							embed = embed
 						})
 						if msg.member then
-							msg.member:ban(reason, 365)
+							msg.member:ban(reason, 1)
 						end
 
 						message:setContent("You banned " .. user .. " for 1 year. Reason:\n```\n" .. reason .. "```")
@@ -5187,6 +5206,9 @@ local messageCreate = function(message, skipChannelActivity)
 	if not command then
 		if string.find(message.content, "L%.?U%.?A%.?") then
 			message:reply("Lua *, it's not an acronym. Noob!")
+		end
+		if string.find(message.content, "gZPygkN0kqM") then
+			return message:delete()
 		end
 
 		if not skipChannelActivity then
