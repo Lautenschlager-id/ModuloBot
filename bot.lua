@@ -26,6 +26,7 @@ local timer = require("timer")
 local base64 = require("Content/base64")
 local binBase64 = require("Content/binBase64")
 local imageHandler = require("Content/imageHandler")
+local xml = require("Content/xml")
 
 require("Content/functions")
 
@@ -145,7 +146,8 @@ local reactions = {
 	idle = "idle:456197711830581249",
 	dnd = "dnd:456197711251636235",
 	offline = "offline:456197711457419276",
-	p5 = "p5:468937377981923339"
+	p5 = "p5:468937377981923339",
+	yes = "\xE2\x9C\x85"
 }
 --[[Doc
 	"Flags of the bytes of the flag emojis of each community in Transformice."
@@ -1105,6 +1107,10 @@ end
 	!table
 ]]
 local currency = {}
+
+local playingAkinator = {
+	__REACTIONS = {"\x31\xE2\x83\xA3", "\x32\xE2\x83\xA3", "\x33\xE2\x83\xA3", "\x34\xE2\x83\xA3", "\x35\xE2\x83\xA3", "\xE2\x8F\xAA", ok = "\xF0\x9F\x86\x97"}
+}
 --[[Doc
 	~
 	"Modulo form-data request boundaries"
@@ -1270,7 +1276,7 @@ local getRate = function(value, of, max)
 	max = max or 10
 
 	local rate = math.min(max, (value * (max / of)))
-	return string.format("`[%s%s] %.2f%%`", string.rep('|', rate), string.rep(' ', max - rate), (value / of * 100))
+	return string.format("`[%s%s] %.2f%%`", string.rep('|', rate), string.rep(' ', max - rate), math.percent(value, of))
 end
 
 --[[Doc
@@ -1287,7 +1293,7 @@ local hasPermission = function(permission, member, message)
 	if permission == permissions.public then
 		return true
 	elseif permission == permissions.has_power then
-		return not not roles[member.highestRole.id]
+		return not not (specialRoleColor(member.highestRole.id) or roles[member.highestRole.id])
 	elseif permission == permissions.is_module then
 		return member:hasRole(roles["module member"])
 	elseif permission == permissions.is_dev then
@@ -1946,6 +1952,75 @@ commands["adoc"] = {
 		end
 	end
 }
+commands["akinator"] = {
+	auth = permissions.public,
+	description = "Starts an Akinator game.",
+	f = function(message, parameters)
+		local langs = {
+			ar = "62.210.100.133:8155",
+			br = "62.4.22.192:8166",
+			cn = "158.69.225.49:8150",
+			en = "62.210.100.133:8157",
+			es = "62.210.100.133:8160",
+			fr = "62.4.22.192:8165",
+			il = "178.33.63.63:8006",
+			it = "62.210.100.133:8159",
+			jp = "178.33.63.63:8012",
+			pl = "37.187.149.213:8143",
+			ru = "62.4.22.192:8169",
+			tr = "62.4.22.192:8164",
+		}
+
+		local lang = langs[string.lower(tostring(parameters))] or langs.en
+
+		local _, body = http.request("GET", "http://" .. lang .. "/ws/new_session.php?base=0&partner=410&premium=0&player=Android-Phone&uid=6fe3a92130c49446&do_geoloc=1&prio=0&constraint=ETAT%3C%3E'AV'&channel=0&only_minibase=0")
+		body = xml:ParseXmlText(tostring(body))
+
+		if body then
+			local numbers = { "one", "two", "three", "four", "five" }
+
+			local cmds = concat(body.RESULT.PARAMETERS.STEP_INFORMATION.ANSWERS.ANSWER, "\n", function(index, value)
+				return ":" .. tostring(numbers[index]) .. ": " .. tostring(value:value())
+			end)
+
+			local msg = message:reply({
+				embed = {
+					color = color.interaction,
+					title =  "<:akinator:456196251743027200> Akinator vs. " .. message.member.name,
+					thumbnail = { url = "https://loritta.website/assets/img/akinator_embed.png" },
+					description = string.format("```\n%s```\n%s", body.RESULT.PARAMETERS.STEP_INFORMATION.QUESTION:value(), cmds),
+					footer = {
+						text = "Question 1"
+					}
+				}
+			})
+
+			if msg then
+				for i = 1, #playingAkinator.__REACTIONS - 1 do
+					msg:addReaction(playingAkinator.__REACTIONS[i])
+				end
+
+				toDelete[message.id] = msg
+			end
+
+			playingAkinator[message.author.id] = {
+				canExe = true,
+				message = msg,
+				cmds = cmds,
+				ratio = 80,
+				currentRatio = nil,
+				lang = lang,
+				data = {
+					channel = body.RESULT.PARAMETERS.IDENTIFICATION.CHANNEL:value(),
+					session = body.RESULT.PARAMETERS.IDENTIFICATION.SESSION:value(),
+					signature = body.RESULT.PARAMETERS.IDENTIFICATION.SIGNATURE:value(),
+					step = body.RESULT.PARAMETERS.STEP_INFORMATION.STEP:value(),
+				},
+				lastBody = body
+			}
+		end
+	end
+}
 commands["avatar"] = {
 	auth = permissions.public,
 	description = "Displays someone's avatar.",
@@ -2432,6 +2507,10 @@ commands["profile"] = {
 		end
 
 		local role = p.discord.highestRole
+		if specialRoleColor(role.id) then
+			role = message.channel.guild:getRole(specialRoleColor(role.id))
+		end
+
 		local fields = { }
 
 		local icon = " "
@@ -5562,6 +5641,112 @@ local reactionAdd = function(cached, channel, messageId, hash, userId)
 				message:removeReaction(polls.__REACTIONS[(answer % 2) + 1], userId)
 			else
 				message:removeReaction(hash, userId)
+			end
+		elseif playingAkinator[userId] then
+			if playingAkinator[userId].message.id == messageId then
+				if playingAkinator[userId].canExe then
+					playingAkinator[userId].canExe = false
+
+					local found, answer = table.find(playingAkinator.__REACTIONS, hash)
+					if found then
+						local update, addResultReaction, query, _, body = false, true, "base=0&channel=" .. playingAkinator[userId].data.channel .. "&session=" .. playingAkinator[userId].data.session .. "&signature=" .. playingAkinator[userId].data.signature
+						local subquery = query .. "&step=" .. playingAkinator[userId].data.step
+
+						local checkAnswer = answer == "ok"
+						if checkAnswer then
+							body = playingAkinator[userId].lastBody
+						else
+							if answer == #playingAkinator.__REACTIONS then
+								_, body = http.request("GET", "http://" .. playingAkinator[userId].lang .. "/ws/cancel_answer.php?" .. subquery)
+							else
+								_, body = http.request("GET", "http://" .. playingAkinator[userId].lang .. "/ws/answer.php?" .. subquery .. "&answer=" .. (answer - 1))
+							end
+							body = xml:ParseXmlText(tostring(body))
+						end
+
+						if body and body.RESULT then
+							playingAkinator[userId].data.step = body.RESULT.PARAMETERS.STEP:value()
+
+							if playingAkinator[userId].data.step == 79 then
+								checkAnswer = checkAnswer or (playingAkinator[userId].currentRatio and playingAkinator[userId].currentRatio >= 75)
+							else
+								playingAkinator[userId].currentRatio = (playingAkinator[userId].data.step == 78) and body.RESULT.PARAMETERS.PROGRESSION:value()
+							end
+
+							local msg = channel:getMessage(messageId)
+
+							if body.RESULT.COMPLETION:value() == "KO - TIMEOUT" then
+								msg.embed.description = ":x: **TIMEOUT**\n\nUnfortunately you took too much time to answer :confused:"
+								addResultReaction = false
+							elseif not checkAnswer and body.RESULT.COMPLETION:value() == "WARN - NO QUESTION" then
+								msg.embed.description = ":x: **Ugh, you won!**\n\nI did not figure out who your character is :( I dare you to try again!"
+								msg.embed.image = { url = "https://a.ppy.sh/5790113_1464841858.png" }
+							else
+								if not checkAnswer and body.RESULT.PARAMETERS.PROGRESSION:value() < playingAkinator[userId].ratio then
+									msg.embed.description = string.format("```\n%s```\n%s\n\n%s", body.RESULT.PARAMETERS.QUESTION:value(), playingAkinator[userId].cmds, getRate(body.RESULT.PARAMETERS.PROGRESSION:value() / 10))
+									msg.embed.footer.text = "Question " .. ((playingAkinator[userId].data.step or 0) + 1)
+									update = true
+								else
+									_, body = http.request("GET", "http://" .. playingAkinator[userId].lang .. "/ws/list.php?" .. query .. "&step=" .. playingAkinator[userId].data.step .. "&size=1&max_pic_width=360&max_pic_height=640&mode_question=0")
+									body = xml:ParseXmlText(tostring(body))
+
+									if not body then
+										channel:send({
+											embed = {
+												color = color.err,
+												description = ":x: | Akinator Error. :( Try again."
+											}
+										})
+										playingAkinator[userId] = nil
+										return
+									end
+
+									msg.embed.author = {
+										name = body.RESULT.PARAMETERS.ELEMENTS.ELEMENT.NAME:value(),
+										icon_url = msg.author.icon_url
+									}
+									msg.embed.title = string.format((checkAnswer and "I bet my hunch is correct... after %s questions!" or "I figured out in the %sth question!"), (playingAkinator[userId].data.step or 0) + (checkAnswer and 1 or 0))
+									msg.embed.image = {
+										url = body.RESULT.PARAMETERS.ELEMENTS.ELEMENT.ABSOLUTE_PICTURE_PATH:value()
+									}
+									msg.embed.description = body.RESULT.PARAMETERS.ELEMENTS.ELEMENT.DESCRIPTION:value()
+									msg.embed.footer = nil
+								end
+							end
+
+							msg:setEmbed(msg.embed)
+							if update then
+								if playingAkinator[userId].data.step == 0 then
+									msg:removeReaction(playingAkinator.__REACTIONS[#playingAkinator.__REACTIONS])
+								elseif playingAkinator[userId].data.step == 1 then 
+									msg:addReaction(playingAkinator.__REACTIONS[#playingAkinator.__REACTIONS])
+								end
+
+								if playingAkinator[userId].data.step == 8 then
+									msg:removeReaction(playingAkinator.__REACTIONS.ok)
+								elseif playingAkinator[userId].data.step == 9 then
+									msg:addReaction(playingAkinator.__REACTIONS.ok)
+								end
+
+								msg:removeReaction(hash, userId)
+
+								playingAkinator[userId].lastBody = body
+							else
+								msg:clearReactions()
+								if addResultReaction then
+									msg:addReaction(reactions.yes) -- Correct
+									msg:addReaction(reactions.x) -- Incorrect
+								end
+
+								playingAkinator[userId] = nil
+							end
+						end
+					end
+
+					if playingAkinator[userId] then
+						playingAkinator[userId].canExe = true
+					end
+				end
 			end
 		end
 	end
