@@ -55,11 +55,12 @@ end
 	>table
 ]]
 string.split = function(str, pat, f)
-	local out = {}
+	local out, counter = { }, 0
 
-	string.gsub(str, pat, function(v)
-		out[#out + 1] = (not f and v or f(v))
-	end)
+	for v in string.gmatch(str, pat) do
+		counter = counter + 1
+		out[counter] = (not f and v or f(v))
+	end
 
 	return out
 end
