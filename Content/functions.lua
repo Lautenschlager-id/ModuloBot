@@ -177,3 +177,11 @@ table.tostring = function(list, depth, stop)
 	
 	return "{\r\n" .. table.concat(out, ",\r\n") .. "\r\n" .. string.rep("\t", depth - 1) .. "}"
 end
+
+table.createSet = function(list)
+	local out = { }
+	for _, v in next, list do
+		out[v] = true
+	end
+	return out
+end
