@@ -1,9 +1,5 @@
 math.randomseed(os.time())
 
---[[ Discordia ]]--
-local discordia = require("discordia")
-discordia.extensions()
-
 -- Avoid memory spam
 do
 	local rep = string.rep
@@ -12,10 +8,14 @@ do
 	end
 end
 
+--[[ Discordia ]]--
+local discordia = require("discordia")
+discordia.extensions()
+
 local client = discordia.Client({
 	cacheAllMembers = true
 })
-client._options.routeDelay = 50
+client._options.routeDelay = 0
 
 local clock = discordia.Clock()
 local minutes = 0
@@ -113,9 +113,12 @@ local channels = {
 	["chat-log"] = "520231441985175572",
 	["role-color"] = "530752494717108224",
 	["top-activity"] = "530793741909491753",
-	["priv-channels"] = "543094720382107659",
-	["module-tutorial"] = "462277184288063540"
+	["priv-channels"] = "543094720382107659"
 }
+--[[Doc
+	"Flags of the staff categories."
+	!table
+]]
 local categories = {
 	["467791436163842048"] = true,
 	["462335892162478080"] = true,
@@ -128,6 +131,15 @@ local categories = {
 	["514914924825411586"] = true,
 	["526829154650554368"] = true,
 	["544935544975786014"] = true
+}
+--[[Doc
+	"Flags of the channels that are used to list the nickname of the members."
+	!table
+]]
+local nickList = {
+	["mt"] = "560458100885291038",
+	["sh"] = "544936174544748587",
+	["fc"] = "556869027893477376"
 }
 --[[Doc
 	"Flags for the embed colors used in the bot."
@@ -260,10 +272,10 @@ local permMaps = {
 	!table
 ]]
 local permissions = {
-	public = 0,
+	public = 0, -- Never change
 	has_power = 1,
-	is_module = 2,
-	is_dev = 3,
+	is_module = 2, -- Never change
+	is_dev = 3, -- Never change
 	is_art = 4,
 	is_map = 5,
 	is_trad = 6,
@@ -273,7 +285,7 @@ local permissions = {
 	is_math = 10,
 	is_fc = 11,
 	is_shades = 12,
-	is_staff = 13,
+	is_staff = 13,  -- Never change
 	is_owner = 14
 }
 --[[Doc
@@ -289,38 +301,17 @@ do
 		permissionOverwrites.module.everyone.denied = { "readMessages" }
 
 		permissionOverwrites.module.staff = {
-			allowed = {
-				"readMessages",
-				"sendMessages",
-				"sendTextToSpeech",
-				"embedLinks",
-				"attachFiles",
-				"readMessageHistory",
-				"useExternalEmojis",
-				"addReactions",
-				"connect",
-				"speak",
-				"moveMembers",
-				"useVoiceActivity"
-			},
-			denied = {
-				"createInstantInvite",
-				"manageChannels",
-				"manageMessages"
-			}
+			allowed = { "readMessages" },
+			denied = { }
 		}
 
 		permissionOverwrites.module.owner = {
 			allowed = table.sum(permissionOverwrites.module.staff.allowed, {
+				"sendMessages",
 				"manageMessages",
-				"mentionEveryone",
-				"muteMembers",
-				"deafenMembers"
+				"mentionEveryone"
 			}),
-			denied = {
-				"createInstantInvite",
-				"manageChannels"
-			}
+			denied = { }
 		}
 	end
 	-- #module.#announcements
@@ -342,18 +333,7 @@ do
 	do
 		permissionOverwrites.public = { public = { } }
 
-		permissionOverwrites.public.public.allowed = {
-			"readMessages",
-			"sendMessages",
-			"embedLinks",
-			"attachFiles",
-			"readMessageHistory",
-			"useExternalEmojis",
-			"addReactions",
-			"connect",
-			"speak",
-			"useVoiceActivity"
-		}
+		permissionOverwrites.public.public.allowed = { "readMessages" }
 	end
 	-- community
 	do
@@ -361,21 +341,31 @@ do
 
 		permissionOverwrites.community.everyone.denied = { "readMessages" }
 
-		permissionOverwrites.community.speaker.allowed = permissionOverwrites.public.public.allowed
+		permissionOverwrites.community.speaker.allowed = { "readMessages" }
 	end
-	--tutorial channel
+	-- tutorial channel
 	do
 		permissionOverwrites.tutorial = { }
 
-		permissionOverwrites.tutorial.allowed = {
-			"readMessages",
-			"readMessageHistory"
-		}
+		permissionOverwrites.tutorial.allowed = { "readMessages" }
 
-		permissionOverwrites.tutorial.denied = {
-			"sendMessages",
-			"addReactions"
-		}
+		permissionOverwrites.tutorial.denied = { "sendMessages", "addReactions"	}
+	end
+	-- module owners and staffs cat
+	do
+		permissionOverwrites.owners_staffs = { }
+
+		permissionOverwrites.owners_staffs.allowed = { "readMessages" }
+
+		permissionOverwrites.owners_staffs.denied = { }
+	end
+	-- muted
+	do
+		permissionOverwrites.muted = { }
+
+		permissionOverwrites.muted.allowed = { }
+
+		permissionOverwrites.muted.denied = { "readMessages" }
 	end
 end
 --[[Doc
@@ -972,13 +962,21 @@ local moduleRestrictions = { "debug", "dofile", "io", "load", "loadfile", "loads
 	1. **__add(tbl, new)** ~> Adds two tables."
 	!table
 ]]
-local meta = {
+local meta
+meta = {
 	__add = function(this, new)
 		if type(new) ~= "table" then return this end
+		local tbl = table.deepcopy(this)
 		for k, v in next, new do
-			this[k] = v
+			tbl[k] = v
 		end
-		return this
+
+		local metatatable = getmetatable(this)
+		if type(metatatable) ~= "table" then
+			metatatable = { }
+		end
+		metatatable.__add = meta.__add
+		return setmetatable(tbl, metatatable)
 	end
 }
 
@@ -1181,17 +1179,17 @@ local toDelete = setmetatable({}, {
 
 --[[@
 	~
-	"A list of muted members"
-	!table
-]]
-local mutedMembers = {}
-
---[[@
-	~
 	"The dev data to be used in !gcmd"
 	!table
 ]]
 local cmdData = { }
+
+--[[@
+	~
+	"The server activity used in !serveractivity"
+	!table
+]]
+local serverActivity = { }
 
 --[[ Functions ]]--
 --[[Doc
@@ -1311,6 +1309,45 @@ local getDatabase = function(fileName, raw)
 	end
 
 	return out
+end
+--[[Doc
+	"Gets the Transformice nickname of a member based on its Discord id"
+	@list int
+	@member int
+	>string|nil
+]]
+local getNick = function(list, member)
+	local channel = client:getChannel(list)
+	if tonumber(member) then
+		member = channel.guild:getMember(member)
+	end
+
+	for msg in channel:getMessages():iter() do
+		if string.find(msg.content, "^<@!?" .. member.id .. ">") then
+			return string.match(msg.content, "= (%S+)")
+		end
+	end
+	return member.name
+end
+--[[Doc
+	"Gets the Discord nickname of a transformice player based on its nickname"
+	@list int
+	@name string
+	>table|nil
+]]
+local getDiscMember = function(list, name)
+	local channel = client:getChannel(list)
+	name = string.nickname(name)
+	if string.find(name, "#0000", -6, -1, true) then
+		name = string.sub(name, 1, -6)
+	end
+
+	for msg in channel:getMessages():iter() do
+		if string.find(msg.content, "= " .. name) then
+			local id = string.match(msg.content, "^<@!?(%d+)>")
+			return channel.guild:getMember(id)
+		end
+	end
 end
 --[[Doc
 	"Generates a string to represent a rate in the format `[| ] 50%`"
@@ -1458,6 +1495,26 @@ local normalizeDiscriminator
 ]]
 normalizeDiscriminator = function(discriminator)
 	return #discriminator > 5 and (string.gsub(discriminator, "#%d%d%d%d", normalizeDiscriminator, 1)) or (discriminator == "#0000" and '' or "`" .. discriminator .. "`")
+end
+
+local addServerActivity = function(x, sub)
+	local today = os.date("%d/%m/%Y")
+	if not serverActivity[today] then
+		serverActivity[today] = {
+			members = { },
+			counter = { 0, 0 },
+			commands = { 0, 0 }
+		}
+	end
+
+	if type(x) == "boolean" then -- Command [true = bot, false = global]
+		local id = (x and 1 or 2)
+		serverActivity[today].commands[id] = serverActivity[today].commands[id] + (sub and -1 or 1)
+	else
+		serverActivity[today].members[x.id] = true -- Thinking
+		local id = (hasPermission(permissions.has_power, x) and 2 or 1)
+		serverActivity[today].counter[id] = serverActivity[today].counter[id] + (sub and -1 or 1)
+	end
 end
 
 local printf = function(...)
@@ -1697,6 +1754,8 @@ local getLuaEnv = function()
 		binBase64 = table.copy(binBase64),
 		bit32 = table.copy(bit),
 
+		categories = table.copy(categories),
+
 		channels = table.copy(channels),
 		color = table.copy(color),
 		concat = concat,
@@ -1713,6 +1772,8 @@ local getLuaEnv = function()
 		getAge = getAge,
 		getCommandFormat = getCommandFormat,
 		getCommandTable = getCommandTable,
+		getDiscMember = getDiscMember,
+		getNick = getNick,
 		getRate = getRate,
 		globalCommands = table.deepcopy(globalCommands),
 
@@ -1727,6 +1788,7 @@ local getLuaEnv = function()
 		modules = table.deepcopy(modules),
 		moonPhase = moonPhase,
 
+		nickList = table.copy(nickList),
 		normalizeDiscriminator = normalizeDiscriminator,
 
 		pairsByIndexes = pairsByIndexes,
@@ -1938,7 +2000,6 @@ commands["adoc"] = {
 	auth = permissions.public,
 	description = "Gets information about a specific tfm api function.",
 	f = function(message, parameters)
-		parameter = parameters and string.match(parameters, "[%w%.]+")
 		if parameters and #parameters > 0 then
 			local head, body = http.request("GET", "https://atelier801.com/topic?f=826122&t=924910")
 
@@ -1947,6 +2008,9 @@ commands["adoc"] = {
 				local _, init = string.find(body, "id=\"message_19463601\">•")
 				body = string.sub(body, init)
 
+				if not string.find(parameters, '.', nil, nil, true) then
+					parameters = "tfm.exec." .. parameters
+				end
 				local syntax, description = string.match(body, "•  (" .. parameters .. " .-)\n(.-)\n\n\n\n")
 
 				if syntax then
@@ -2309,54 +2373,74 @@ commands["help"] = {
 	auth = permissions.public,
 	f = function(message, _, category, cmdSrc)
 		if category and string.sub(category, 1, 1) == "#" then
-			table.sort(modules[category].commands, function(c1, c2) return c1.auth < c2.auth end)
+			local keys = { } -- auths cuz the system is fkd
+			local cmds = { }
+			for cmd, data in next, modules[category].commands do
+				if not cmds[data.auth] then
+					cmds[data.auth] = { }
+					keys[#keys + 1] = data.auth
+				end
+				cmds[data.auth][#cmds[data.auth] + 1] = { cmd = cmd, data = data }
+			end
+			table.sort(keys)
+
+			local prefix = "**" .. (modules[category].prefix or "!")
+
+			for k, v in next, keys do
+				local icon = ((v > permissions.public) and ":small_blue_diamond:" or ":small_orange_diamond:")
+				table.sort(cmds[v], function(c1, c2) return c1.cmd < c2.cmd end)
+				for j = 1, #cmds[v] do
+					cmds[v][j] = icon .. prefix .. cmds[v][j].cmd .. "** " .. (cmds[v][j].data.desc and base64.decode(cmds[v][j].data.desc) or '')
+				end
+				keys[k] = table.concat(cmds[v], '\n')
+			end
+			cmds = table.concat(keys, '\n')
 
 			toDelete[message.id] = message:reply({
 				content = "<@!" .. message.author.id .. ">",
 				embed = {
 					color = color.sys,
 					title = category .. " commands",
-					description = concat(modules[category].commands, "\n", function(cmd, data)
-						return ":small_" .. (data.auth == 0 and "orange" or "blue") .. "_diamond: **" .. (modules[category].prefix or "!") .. cmd .. "** " .. (data.desc or '')
-					end)
+					description = cmds
 				}
 			})
 		else
-			local cmds = {}
+			local keys = { } -- auths cuz the system is fkd
+			local cmds, icon, description, index = { }
 			for cmd, data in next, (cmdSrc or commands) do
-				local ret = ''
-				if not data.category or data.category == (message.channel.category and message.channel.category.id or nil) then
+				if not data.category or (message.channel.category and data.category == message.channel.category.id) then
 					if not data.channel or data.channel == message.channel.id then
-						if (data.auth and hasPermission(data.auth, message.member, message) or authIds[message.author.id]) then
-							if not data.auth then
-								ret = ":gear: "
-							elseif data.auth > permissions.public then
-								ret = ":small_blue_diamond: "
-							else
-								ret = ":small_orange_diamond: "
-							end
+						if authIds[message.author.id] or (data.auth and hasPermission(data.auth, message.member, message)) then
+							icon = (not data.auth and ":gear: " or (data.auth > permissions.public) and ":small_blue_diamond: " or ":small_orange_diamond: ")
 
-							local description = data.description
+							description = data.description
 							if not description then
 								description = data.desc and base64.decode(data.desc) or nil
 							end
+							description = description and ("- " .. description) or ''
 
-							cmds[#cmds + 1] = {
-								str = ret .. "**!" .. cmd .. "** " .. (description and ("- " .. description) or ''),
-								auth = data.auth
-							}
+							index = data.auth or 666
+							if not cmds[index] then
+								cmds[index] = { }
+								keys[#keys + 1] = index
+							end
+							cmds[index][#cmds[index] + 1] = { cmd = cmd, data = icon .. "**!" .. cmd .. "** " .. description }
 						end
 					end
 				end
 			end
-			table.sort(cmds, function(a, b)
-				local x, y = a.auth or 999, b.auth or 999
-				return x < y
-			end)
+			table.sort(keys)
 
-			local lines = splitByLine(concat(cmds, "\n", function(index, value)
-				return value.str
-			end))
+			for k, v in next, keys do
+				table.sort(cmds[v], function(c1, c2) return c1.cmd < c2.cmd end)
+				for j = 1, #cmds[v] do
+					cmds[v][j] = cmds[v][j].data
+				end
+				keys[k] = table.concat(cmds[v], '\n')
+			end
+			cmds = table.concat(keys, '\n')
+
+			local lines = splitByLine(cmds)
 
 			local msg = { }
 			for line = 1, #lines do
@@ -3055,7 +3139,7 @@ commands["tfmprofile"] = {
 	description = "Displays your profile on Transformice.",
 	f = function(message, parameters)
 		if parameters and #parameters > 2 then
-			parameters = string.gsub(string.nickname(parameters), "#0000", '')
+			parameters = string.nickname(parameters)
 			local head, body = http.request("GET", "https://api.club-mice.com/mouse.php?name=" .. encodeUrl(parameters))
 			body = json.decode(body)
 
@@ -3064,21 +3148,41 @@ commands["tfmprofile"] = {
 					return sendError(message, "TFMPROFILE", "Player '" .. parameters .. "' not found.")
 				end
 
-				if not body.title then
-					body.title = "«Little Mouse»"
+				if not body.title_id then
+					body.title_id = "«Little Mouse»"
 				else
-					body.title = string.gsub(body.title, "&amp;", '&')
-					body.title = string.gsub(body.title, "\\u00ab", '«')
-					body.title = string.gsub(body.title, "\\u00bb", '»')
+					body.title_id = string.gsub(body.title_id, "&amp;", '&')
+					body.title_id = string.gsub(body.title_id, "\\u00ab", '«')
+					body.title_id = string.gsub(body.title_id, "\\u00bb", '»')
 				end
 
-				local _, remain, need = expToLvl(tonumber(body.experience))
+				local level, remain, need = expToLvl(tonumber(body.experience))
+
+				local tribe
+				if body.id_tribe then
+					local _
+					_, tribe = http.request("GET", "https://api.club-mice.com/tribe.php?tribe=" .. body.id_tribe)
+					tribe = json.decode(tribe)
+					if tribe then
+						tribe = tribe.name
+					end
+				end
+
+				local soulmate
+				if body.id_spouse then
+					local _
+					_, soulmate = http.request("GET", "https://api.club-mice.com/mouse.php?name=" .. body.id_spouse)
+					soulmate = json.decode(soulmate)
+					if soulmate then
+						soulmate = soulmate.name
+					end
+				end
 
 				toDelete[message.id] = message:reply({
 					embed = {
 						color = color.atelier801,
-						title = "<:tfm_cheese:458404666926039053> Transformice Profile - " .. parameters .. (body.gender == "Male" and " <:male:456193580155928588>" or body.gende == "Female" and " <:female:456193579308679169>" or ""),
-						description = (body.registration_date == "" and "" or (":calendar: " .. body.registration_date .. "\n\n")) .. "**Level " .. body.level .. "** " .. getRate(math.percent(remain, (remain + need)), 100, 5) .. (body.tribe and ("\n<:tribe:458407729736974357> **Tribe :** " .. body.tribe) or "") .. "\n```\n" .. body.title .. "```\n<:shaman:512015935989612544> " .. body.saved_mice .. " / " .. body.saved_mice_hard .. " / " .. body.saved_mice_divine .. "\n<:tfm_cheese:458404666926039053> **Shaman cheese :** " .. body.shaman_cheese .. "\n\n<:racing:512016668038266890> **Firsts :** " .. body.first .. " " .. getRate(math.percent(body.first, body.round_played, 100), 100, 5) .. "\n<:tfm_cheese:458404666926039053> **Cheeses: ** " .. body.cheese_gathered .. " " .. getRate(math.percent(body.cheese_gathered, body.round_played, 100), 100, 5) .. "\n\n<:bootcamp:512017071031451654> **Bootcamps :** " .. body.bootcamp .. (body.spouse and("\n\n:revolving_hearts: **" .. normalizeDiscriminator(body.spouse) .. (body.marriage_date and ("** since **" .. body.marriage_date .. "**") or "**")) or ""),
+						title = "<:tfm_cheese:458404666926039053> Transformice Profile - " .. parameters .. (body.gender == "2" and " <:male:456193580155928588>" or body.gende == "1" and " <:female:456193579308679169>" or ""),
+						description = --[[(body.registration_date == "" and "" or (":calendar: " .. body.registration_date .. "\n\n")) .. ]]"**Level " .. level .. "** " .. getRate(math.percent(remain, (remain + need)), 100, 5) .. "\n" .. (tribe and ("\n<:tribe:458407729736974357> **Tribe :** " .. tribe) or "") .. --[["\n```\n" .. body.title_id .. "```"]]"\n<:shaman:512015935989612544> " .. body.saved_mice .. " / " .. body.saved_mice_hard .. " / " .. body.saved_mice_divine .. "\n<:tfm_cheese:458404666926039053> **Shaman cheese :** " .. body.shaman_cheese .. "\n\n<:racing:512016668038266890> **Firsts :** " .. body.first .. " " .. getRate(math.percent(body.first, body.round_played, 100), 100, 5) .. "\n<:tfm_cheese:458404666926039053> **Cheeses: ** " .. body.cheese_gathered .. " " .. getRate(math.percent(body.cheese_gathered, body.round_played, 100), 100, 5) .. "\n\n<:bootcamp:512017071031451654> **Bootcamps :** " .. body.bootcamp .. (soulmate and("\n\n:revolving_hearts: **" .. normalizeDiscriminator(soulmate) .. (body.marriage_date and ("** since **" .. body.marriage_date .. "**") or "**")) or ""),
 						thumbnail = { url = body.avatar }
 					}
 				})
@@ -3264,7 +3368,7 @@ commands["translate"] = {
 				end
 
 				content = string.sub(content, 1, 250)
-				local head, body = http.request("GET", "https://translate.googleapis.com/translate_a/single?client=gtx&sl=" .. sourceLanguage .. "&tl=" .. targetLanguage .. "&dt=t&q=" .. encodeUrl(content))
+				local head, body = http.request("GET", "https://translate.googleapis.com/translate_a/single?client=gtx&sl=" .. sourceLanguage .. "&tl=" .. targetLanguage .. "&dt=t&q=" .. encodeUrl(content), { { "User-Agent","Mozilla/5.0" } })
 				body = json.decode(tostring(body))
 
 				if body and #body > 0 then
@@ -3696,9 +3800,17 @@ commands["cmd"] = {
 	end
 }
 	-- Developer
+commands["conn"] = {
+	auth = permissions.is_dev,
+	description = "Checks the BOT ping.",
+	f = function(message, parameters)
+		local m = message:reply("pong")
+		m:setContent("**Ping** : " .. string.format("%.3f", ((m.createdAt - message.createdAt) * 1000)) .. " ms.")
+	end
+}
 commands["lua"] = {
 	auth = permissions.is_dev,
-	description = "Runs Lua.",
+	description = "Loads a Lua code.",
 	f = function(message, parameters, _, isTest, compEnv)
 		local syntax = "Use `!lua ```code``` `."
 
@@ -3911,20 +4023,26 @@ commands["lua"] = {
 				]]
 				ENV.guild = message.guild
 			end
-			ENV.discord.getData = function(userId)
-				assert(userId, "User id can't be nil in discord.getData")
-
+			
+			local getOwner = function(message, name)
 				local owner
 				if isTest == debugAction.cmd then
 					local cmd = string.match(message.content, "!(%S+)")
 					cmd = string.lower(tostring(cmd))
-					assert(globalCommands[cmd], "Source command not found (getData).")
-					
+					assert(globalCommands[cmd], "Source command not found (" .. name .. ").")
+
 					owner = globalCommands[cmd].author
 				else
 					owner = message.author.id
-					assert(hasPermission(permissions.is_module, message.guild:getMember(owner)), "You cannot use this function (getData).")
+					assert(hasPermission(permissions.is_module, message.guild:getMember(owner)), "You cannot use this function (" .. name .. ").")
 				end
+				return owner
+			end
+			
+			ENV.discord.getData = function(userId)
+				assert(userId, "User id can't be nil in discord.getData")
+
+				local owner = getOwner(message, "getData")
 
 				if cmdData[owner] then
 					return cmdData[owner][userId] and base64.decode(cmdData[owner][userId]) or ''
@@ -3934,46 +4052,56 @@ commands["lua"] = {
 			ENV.discord.saveData = function(userId, data)
 				assert(userId, "User id can't be nil in discord.saveData")
 				userId = tostring(userId)
-				assert(message.guild:getMember(userId), "Invalid user '" .. userId .. "'.")
 				assert(data, "Data can't be nil in discord.saveData")
 				data = tostring(data)
 				assert(#data <= 3000, "Data can't exceed 3000 characters")
 
-				local owner
-				if isTest == debugAction.cmd then
-					local cmd = string.match(message.content, "!(%S+)")
-					cmd = string.lower(tostring(cmd))
-					assert(globalCommands[cmd], "Source command not found (saveData).")
-					
-					owner = globalCommands[cmd].author
-				else
-					owner = message.author.id
-					assert(hasPermission(permissions.is_module, message.guild:getMember(owner)), "You cannot use this function (getData).")
-				end
+				local owner = getOwner(message, "saveData")
 
-				if not cmdData[message.author.id] then
-					cmdData[message.author.id] = { }
+				if not cmdData[owner] then
+					cmdData[owner] = { }
 				end
-				cmdData[message.author.id][userId] = base64.encode(data)
+				cmdData[owner][userId] = (data ~= '' and base64.encode(data) or nil)
 				return true
 			end
 
 			ENV.getImage = function(url)
 				assert(url, "Url can't be nil in getImage")
 
-				local owner
-				if isTest == debugAction.cmd then
-					local cmd = string.match(message.content, "!(%S+)")
-					cmd = string.lower(tostring(cmd))
-					assert(globalCommands[cmd], "Source command not found (getImage).")
-					
-					owner = globalCommands[cmd].author
-				else
-					owner = message.author.id
-					assert(hasPermission(permissions.is_module, message.guild:getMember(owner)), "You cannot use this function (getImage).")
-				end
+				local owner = getOwner(message, "getImage")
 
 				return tostring(imageHandler.fromUrl(url))
+			end
+
+			ENV.discord.addReaction = function(messageId, reaction)
+				assert(messageId, "Message id can't be nil in discord.addReaction")
+				assert(reaction, "Reaction can't be nil in discord.addReaction")
+
+				messageId = tostring(messageId)
+				local msg = message.channel:getMessage(messageId)
+				assert(msg, "Message '" .. tostring(messageId) .. "' not found.")
+
+				local owner = getOwner(message, "addReaction")
+
+				return msg:addReaction(reaction)
+			end
+
+			ENV.discord.retrieveReactions = function(messageId)
+				messageId = tostring(messageId)
+				local msg = message.channel:getMessage(messageId)
+				assert(msg, "Message '" .. tostring(messageId) .. "' not found.")
+
+				local reactions, counter = { }, 0
+				for reaction in msg.reactions:iter() do
+					reactions[reaction.emojiHash] = { }
+					counter = 0
+					for member in reaction:getUsers():iter() do
+						counter = counter + 1
+						reactions[reaction.emojiHash][counter] = member.id
+					end
+				end
+
+				return reactions
 			end
 
 			local func, syntaxErr = load(parameters, '', 't', ENV)
@@ -4138,6 +4266,8 @@ commands["public"] = {
 
 				public_channel:getPermissionOverwriteFor(message.guild.defaultRole):denyPermissions(table.unpack(permissionOverwrites.module.everyone.denied))
 				public_channel:getPermissionOverwriteFor(public_role):allowPermissions(table.unpack(permissionOverwrites.public.public.allowed))
+				-- Muted
+				setPermissions(public_channel:getPermissionOverwriteFor(message.guild:getRole("565703024136421406")), permissionOverwrites.muted.allowed, permissionOverwrites.muted.denied)
 
 				local staff_roles = { }
 				message.guild.roles:find(function(role)
@@ -4496,10 +4626,19 @@ commands["module"] = {
 						-- Announcements
 						setPermissions(announcements_channel:getPermissionOverwriteFor(staff_role), permissionOverwrites.announcements.staff.allowed, permissionOverwrites.announcements.staff.denied)
 
-						-- Tutorial
-						local tutorial = client:getChannel(channels["module-tutorial"])
+						-- Commands
+						local tutorial = client:getChannel("462277184288063540")
 						setPermissions(tutorial:getPermissionOverwriteFor(owner_role), permissionOverwrites.tutorial.allowed, permissionOverwrites.tutorial.denied)
 						setPermissions(tutorial:getPermissionOverwriteFor(staff_role), permissionOverwrites.tutorial.allowed, permissionOverwrites.tutorial.denied)
+
+						-- Owners
+						local owners = client:getChannel("560901122349465611")
+						setPermissions(owners:getPermissionOverwriteFor(owner_role), permissionOverwrites.owners_staffs.allowed, permissionOverwrites.owners_staffs.denied)
+
+						-- Staffs
+						local staffs = client:getChannel("560901441632469028")
+						setPermissions(staffs:getPermissionOverwriteFor(owner_role), permissionOverwrites.owners_staffs.allowed, permissionOverwrites.owners_staffs.denied)
+						setPermissions(staffs:getPermissionOverwriteFor(staff_role), permissionOverwrites.owners_staffs.allowed, permissionOverwrites.owners_staffs.denied)
 
 						owner:addRole(owner_role)
 
@@ -4514,6 +4653,7 @@ commands["module"] = {
 								description = "The module **" .. module .. "** was created successfully!"
 							}
 						})
+						message:delete()
 					else
 						sendError(message, "MODULE", "The module '" .. module .. "' already exists.")
 					end
@@ -4658,6 +4798,7 @@ commands["commu"] = {
 
 				channel:getPermissionOverwriteFor(message.guild.defaultRole):denyPermissions(table.unpack(permissionOverwrites.community.everyone.denied))
 				channel:getPermissionOverwriteFor(role):allowPermissions(table.unpack(permissionOverwrites.community.speaker.allowed))
+				setPermissions(channel:getPermissionOverwriteFor(message.guild:getRole("565703024136421406")), permissionOverwrites.muted.allowed, permissionOverwrites.muted.denied)
 
 				message:reply({
 					content = "<@!" .. message.author.id .. ">",
@@ -4713,6 +4854,7 @@ commands["exit"] = {
 		save("b_activechannels", activeChannels)
 		save("b_activemembers", activeMembers)
 		save("b_cmddata", cmdData)
+		save("b_serveractivity", serverActivity)
 
 		message:delete()
 		log("INFO", "Disconnected from '" .. client.user.name .. "'", logColor.red)
@@ -4726,11 +4868,18 @@ commands["mute"] = {
 
 		if parameters and #parameters > 0 then
 			local user, time = string.match(parameters, "<@!?(%d+)>[\n ]+(%d+)$")
+
+			local member = user and message.guild:getMember(user)
 			time = tonumber(time)
 
-			if time then
+			if member and time then
 				message:delete()
-				mutedMembers[user] = os.time() + (time * 60)
+
+				member:addRole("565703024136421406")
+				timer.setTimeout(time * 6e4, coroutine.wrap(function(member)
+					member:removeRole("565703024136421406")
+				end), member)
+
 				message:reply({
 					embed = {
 						color = color.moderation,
@@ -4747,7 +4896,7 @@ commands["mute"] = {
 	end
 }
 commands["ping"] = {
-	description = "Let's a role be pingeable or not.",
+	description = "Lets a role be pingable or not.",
 	f = function(message, parameters)
 		local syntax = "Use `!ping role_name/role_id`"
 
@@ -4792,6 +4941,9 @@ commands["refresh"] = {
 		end
 		if table.count(cmdData) > 0 then
 			save("b_cmddata", cmdData)
+		end
+		if table.count(serverActivity) > 0 then
+			save("b_serveractivity", serverActivity)
 		end
 
 		message:delete()
@@ -4950,8 +5102,8 @@ channelCommandBehaviors["bridge"] = {
 	f = function(message)
 		if not message.content or message.content == "" then return end
 
-		local user, member = string.match(message.content, "(%d+)|(%d+)")
-		local by = "Hosted by **" .. (client:getGuild(channels["guild"]):getMember(member) or client:getUser(member)).name .. "**"
+		local user, sep, who, member = string.match(message.content, "(%d+)([|&])(.*)%2(%d+)")
+		local by = "Hosted by <@" .. member .. "> **" .. who .. "** " .. (sep == "&" and "[Funcorp]" or '')
 
 		local private_message = client:getUser(user):send({ content = by, embed = message.embed })
 		if not private_message then
@@ -5243,11 +5395,15 @@ channelReactionBehaviors["image"] = {
 
 		local member = channel.guild:getMember(userId)
 
-		if hasPermission(permissions.is_module, member) or hasPermission(permissions.is_fc, member) then
+		local isMt, isFc = hasPermission(permissions.is_module, member), hasPermission(permissions.is_fc, member)
+		if isMt or isFc then
+			local sep = (isMt and "|" or "&")
+			local who = getNick(nickList[isMt and "mt" or "fc"], member)
+
 			local img = (message.attachment and message.attachment.url or nil)
 
 			if hash == reactions.x then
-				message.author:send("Hello, unfortunately your **#image-host** request has been denied. It may be inappropriate, may have copyrights or may have something wrong.\n\nOriginal post:\n\n" .. message.content .. "\n" .. (img or ""))
+				message.author:send("Hello, unfortunately your **#image-host** request has been rejected by [<@" .. member.id .. ">] **" .. who .. "**. It may be inappropriate, may have copyrights or may have something wrong.\n\nOriginal post:\n\n" .. message.content .. "\n" .. (img or ""))
 				return message:delete()
 			end
 
@@ -5296,7 +5452,7 @@ channelReactionBehaviors["image"] = {
 						album[#album + 1] = images[i]
 					else
 						client:getChannel(channels["bridge"]):send({
-							content = "!upload `" .. userId .. "|" .. message.author.id .. "`",
+							content = "!upload `" .. userId .. sep .. who .. sep .. message.author.id .. "`",
 							file = tostring(images[i])
 						})
 					end
@@ -5319,11 +5475,11 @@ channelReactionBehaviors["image"] = {
 					end
 
 					if body then
-						client:getChannel(channels["bridge"]):send("!upload `" .. userId .. "|" .. message.author.id .. "` https://imgur.com/a/" .. albumCode)
+						client:getChannel(channels["bridge"]):send("!upload `" .. userId .. sep .. who .. sep .. message.author.id .. "` https://imgur.com/a/" .. albumCode)
 					end
 				end
 			else
-				local cmd = "!upload `" .. userId .. "|" .. message.author.id .. "` "
+				local cmd = "!upload `" .. userId .. sep .. who .. sep .. message.author.id .. "` "
 				for link in string.gmatch(content, "[^\n]+") do
 					client:getChannel(channels["bridge"]):send(cmd .. link)
 				end
@@ -5349,17 +5505,17 @@ channelReactionBehaviors["report"] = {
 				local reason = string.match(message.content, "```\n(.-)```")
 				local embed = {
 					color = color.err,
-					description = message.description,
-					image = message.image,
-					footer = message.footer,
-					timestamp = message.timestamp
+					description = message.embed.description,
+					image = message.embed.image,
+					footer = message.embed.footer,
+					timestamp = message.embed.timestamp
 				}
 				local user = "**" .. (msg.member or msg.author).name .. "** <@" .. msg.author.id .. ">"
 
 				message:setContent("") -- Bug?
 				if hash == reactions.wave then
 					msg.author:send({
-						content = "Your message was removed due to a report. Behave or you may be kicked/banned at some point.",
+						content = "Your message was removed due to a report. Stop breaking the rules or you may be kicked/banned in the future.",
 						embed = embed
 					})
 
@@ -5369,7 +5525,7 @@ channelReactionBehaviors["report"] = {
 					msg:delete()
 					if hash == reactions.boot then
 						msg.author:send({
-							content = "You got kicked from **Fifty Shades of Lua** due to a report. You can join again when you improve your behavior.",
+							content = "You got kicked from **Fifty Shades of Lua** due to a report / breaking rules excessively. You can join again when you improve your behavior.",
 							embed = embed
 						})
 						if msg.member then
@@ -5379,14 +5535,14 @@ channelReactionBehaviors["report"] = {
 						message:setContent("You kicked " .. user .. ". Reason:\n```\n" .. reason .. "```")
 					elseif hash == reactions.bomb then
 						msg.author:send({
-							content = "You got banned from **Fifty Shades of Lua** due to a report. Contact <@" .. client.owner.id .. "> to appeal or come back in 1 year.",
+							content = "You got banned from **Fifty Shades of Lua** due to a report / breaking rules excessively. Contact <@" .. client.owner.id .. "> to appeal if you consider necessary.",
 							embed = embed
 						})
 						if msg.member then
 							msg.member:ban(reason, 1)
 						end
 
-						message:setContent("You banned " .. user .. " for 1 year. Reason:\n```\n" .. reason .. "```")
+						message:setContent("You just banned " .. user .. ". Reason:\n```\n" .. reason .. "```")
 					end
 				end
 				message:clearReactions()
@@ -5449,6 +5605,7 @@ client:on("ready", function()
 	activeMembers = getDatabase("b_activemembers")
 	staffMembers = getDatabase("b_memberprofiles")
 	cmdData = getDatabase("b_cmddata")
+	serverActivity = getDatabase("b_serveractivity")
 	-- Normalize string indexes ^
 	for k, v in next, table.copy(staffMembers) do
 		for i, j in next, v do
@@ -5461,9 +5618,9 @@ client:on("ready", function()
 	end
 
 	-- Imageshack
-	if not io.popen("convert"):read() then
-		os.execute("sudo apt install imagemagic -y")
-	end
+	--if not io.popen("convert"):read() then
+	--	os.execute("sudo apt install imagemagic -y")
+	--end
 
 	-- Env Limits
 	local restricted_G = table.clone(_G, devRestrictions)
@@ -5487,7 +5644,6 @@ client:on("ready", function()
 		__index = setmetatable({
 			boundaries = boundaries,
 
-			categories = categories,
 			channelCommandBehaviors = channelCommandBehaviors,
 			channelReactionBehaviors = channelReactionBehaviors,
 			client = client,
@@ -5508,8 +5664,6 @@ client:on("ready", function()
 
 			log = log,
 
-			mutedMembers = mutedMembers,
-
 			--[[Doc
 				~
 				"Prints a string in the console."
@@ -5521,6 +5675,7 @@ client:on("ready", function()
 
 			save = save,
 			sendError = sendError,
+			serverActivity = serverActivity,
 			setPermissions = setPermissions,
 
 			throwError = throwError,
@@ -5638,14 +5793,6 @@ messageCreate = function(message, skipChannelActivity)
 		end
 	end
 
-	if mutedMembers[message.author.id] then
-		if mutedMembers[message.author.id] > os.time() then
-			return message:delete()
-		else
-			mutedMembers[message.author.id] = nil
-		end
-	end
-
 	-- Detect prefix
 	local prefix = "!"
 	local category = message.channel.category and string.lower(message.channel.category.name) or nil
@@ -5703,6 +5850,8 @@ messageCreate = function(message, skipChannelActivity)
 				else
 					activeMembers[message.author.id] = activeMembers[message.author.id] + 1
 				end
+
+				addServerActivity(message.member)
 			end
 		end
 		return
@@ -5737,8 +5886,10 @@ messageCreate = function(message, skipChannelActivity)
 		end
 
 		if botCommand then
+			addServerActivity(true)
 			throwError(message, { "Command [" .. string.upper(command) .. "]" }, cmd.f, message, parameters, category)
 		else
+			addServerActivity(false)
 			throwError(message, { "Global Command [" .. string.upper(command) .. "]" }, globalCommandCall, cmd, message, parameters)
 		end
 	end
@@ -5763,6 +5914,7 @@ messageDelete = function(message, skipChannelActivity)
 			end
 			if activeMembers[message.author.id] and activeMembers[message.author.id] > 0 then
 				activeMembers[message.author.id] = activeMembers[message.author.id] - 1
+				addServerActivity(message.member, true)
 			end
 		end
 		-- Less than 10 seconds = log
@@ -6011,7 +6163,7 @@ end)
 
 local clockMin = function()
 	xpcall(function()
-	
+
 	if not modules then return end
 	minutes = minutes + 1
 
@@ -6024,6 +6176,7 @@ local clockMin = function()
 		save("b_activemembers", activeMembers)
 		save("b_memberprofiles", staffMembers)
 		save("b_cmddata", cmdData)
+		save("b_serveractivity", serverActivity)
 	end
 
 	for k, v in next, table.deepcopy(polls) do
