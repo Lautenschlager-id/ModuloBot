@@ -28,7 +28,6 @@ local timer = require("timer")
 local base64 = require("Content/base64")
 local binBase64 = require("Content/binBase64")
 local imageHandler = require("Content/imageHandler")
-local xml = require("Content/xml")
 local utf8 = require("Content/utf8")
 
 require("Content/functions")
@@ -138,8 +137,9 @@ local categories = {
 ]]
 local nickList = {
 	["mt"] = "560458100885291038",
+	["td"] = "569606722059108392",
 	["sh"] = "544936174544748587",
-	["fc"] = "556869027893477376"
+	["fc"] = "556869027893477376",
 }
 --[[Doc
 	"Flags for the embed colors used in the bot."
@@ -366,6 +366,17 @@ do
 		permissionOverwrites.muted.allowed = { }
 
 		permissionOverwrites.muted.denied = { "readMessages" }
+	end
+	-- prj
+	do
+		permissionOverwrites.prj = { }
+
+		permissionOverwrites.prj.allowed = {
+			"readMessages",
+			"mentionEveryone"
+		}
+
+		permissionOverwrites.prj.denied = permissionOverwrites.community.everyone.denied
 	end
 end
 --[[Doc
@@ -2008,9 +2019,6 @@ commands["adoc"] = {
 				local _, init = string.find(body, "id=\"message_19463601\">•")
 				body = string.sub(body, init)
 
-				if not string.find(parameters, '.', nil, nil, true) then
-					parameters = "tfm.exec." .. parameters
-				end
 				local syntax, description = string.match(body, "•  (" .. parameters .. " .-)\n(.-)\n\n\n\n")
 
 				if syntax then
@@ -2099,30 +2107,29 @@ commands["akinator"] = {
 	description = "Starts an Akinator game.",
 	f = function(message, parameters)
 		local langs = {
-			ar = "62.210.100.133:8155",
-			br = "62.4.22.192:8166",
-			cn = "158.69.225.49:8150",
-			en = "62.210.100.133:8157",
-			es = "62.210.100.133:8160",
-			fr = "62.4.22.192:8165",
-			il = "178.33.63.63:8006",
-			it = "62.210.100.133:8159",
-			jp = "178.33.63.63:8012",
-			pl = "37.187.149.213:8143",
-			ru = "62.4.22.192:8169",
-			tr = "62.4.22.192:8164",
+			ar = "https://srv2.akinator.com:9155",
+			br = "https://srv2.akinator.com:9161",
+			en = "https://srv2.akinator.com:9157",
+			es = "https://srv6.akinator.com:9127",
+			fr = "https://srv3.akinator.com:9217",
+			he = "https://srv12.akinator.com:9189",
+			it = "https://srv9.akinator.com:9214",
+			jp = "https://srv11.akinator.com:9172",
+			pl = "https://srv12.akinator.com:9188",
+			ru = "https://srv12.akinator.com:9190",
+			tr = "https://srv3.akinator.com:9211",
 		}
 
 		local lang = langs[string.lower(tostring(parameters))] or langs[string.lower(message.channel.name)] or langs.en
 
-		local _, body = http.request("GET", "http://" .. lang .. "/ws/new_session.php?base=0&partner=410&premium=0&player=Android-Phone&uid=6fe3a92130c49446&do_geoloc=1&prio=0&constraint=ETAT%3C%3E'AV'&channel=0&only_minibase=0")
-		body = xml:ParseXmlText(tostring(body))
+		local _, body = http.request("GET", lang .. "/ws/new_session?base=0&partner=410&premium=0&player=Android-Phone&uid=6fe3a92130c49446&do_geoloc=1&prio=0&constraint=ETAT%3C%3E'AV'&channel=0&only_minibase=0")
+		body = json.decode(body)
 
 		if body then
 			local numbers = { "one", "two", "three", "four", "five" }
 
-			local cmds = concat(body.RESULT.PARAMETERS.STEP_INFORMATION.ANSWERS.ANSWER, "\n", function(index, value)
-				return ":" .. tostring(numbers[index]) .. ": " .. tostring(value:value())
+			local cmds = concat(body.parameters.step_information.answers, "\n", function(index, value)
+				return ":" .. tostring(numbers[index]) .. ": " .. tostring(value.answer)
 			end)
 
 			local msg = message:reply({
@@ -2131,7 +2138,7 @@ commands["akinator"] = {
 					color = color.interaction,
 					title =  "<:akinator:456196251743027200> Akinator vs. " .. message.member.name,
 					thumbnail = { url = "https://loritta.website/assets/img/akinator_embed.png" },
-					description = string.format("```\n%s```\n%s", body.RESULT.PARAMETERS.STEP_INFORMATION.QUESTION:value(), cmds),
+					description = string.format("```\n%s```\n%s", body.parameters.step_information.question, cmds),
 					footer = {
 						text = "Question 1"
 					}
@@ -2154,10 +2161,10 @@ commands["akinator"] = {
 				currentRatio = nil,
 				lang = lang,
 				data = {
-					channel = body.RESULT.PARAMETERS.IDENTIFICATION.CHANNEL:value(),
-					session = body.RESULT.PARAMETERS.IDENTIFICATION.SESSION:value(),
-					signature = body.RESULT.PARAMETERS.IDENTIFICATION.SIGNATURE:value(),
-					step = body.RESULT.PARAMETERS.STEP_INFORMATION.STEP:value(),
+					channel = body.parameters.identification.channel,
+					session = body.parameters.identification.session,
+					signature = body.parameters.identification.signature,
+					step = body.parameters.step_information.step,
 				},
 				lastBody = body
 			}
@@ -2196,20 +2203,23 @@ commands["coin"] = {
 
 				local from, to, amount
 
-				to = string.match(parameters, "^...")
-				if to then
-					to = string.upper(to)
-					if not currency[to] then
-						return sendError(message, "COIN", ":fire: | Invalid to_currency '" .. to .. "'!", available_currencies)
-					end
-				end
-
-				from = string.match(parameters, "[ \n]+(...)[ \n]*")
+				from = string.match(parameters, "^...")
 				if from then
 					from = string.upper(from)
 					if not currency[from] then
 						return sendError(message, "COIN", ":fire: | Invalid from_currency '" .. from .. "'!", available_currencies)
 					end
+				end
+
+				to = string.match(parameters, "[ \n]+(...)[ \n]*")
+				if to then
+					to = string.upper(to)
+					if not currency[to] then
+						return sendError(message, "COIN", ":fire: | Invalid to_currency '" .. to .. "'!", available_currencies)
+					end
+				else
+					to = from
+					from = nil
 				end
 
 				local randomEmoji = ":" .. table.random({ "money_mouth", "money_with_wings", "moneybag" }) .. ":"
@@ -2867,7 +2877,7 @@ commands["quote"] = {
 	description = "Quotes an old message.",
 	f = function(message, parameters)
 		if parameters and #parameters > 0 then
-			local quotedChannel, quotedMessage = string.match(parameters, "(%d+)%-(%d+)")
+			local quotedChannel, quotedMessage = string.match(parameters, "<?#?(%d+)>? *%-(%d+)")
 			quotedMessage = quotedMessage or string.match(parameters, "%d+")
 
 			if quotedMessage then
@@ -3355,7 +3365,7 @@ commands["translate"] = {
 	auth = permissions.public,
 	description = "Translates a sentence using Google Translate. Professional translations: https://discord.gg/mMre2Dz",
 	f = function(message, parameters)
-		local syntax = "Use `!word [from_language-]to_language sentence`."
+		local syntax = "Use `!translate [from_language-]to_language sentence`."
 
 		if parameters and #parameters > 0 then
 			local language, content = string.match(parameters, "(%S+)[ \n]+(.+)$")
@@ -3715,7 +3725,7 @@ commands["prj"] = {
 						end
 					else -- Add user(s)
 						for member = 1, counter do
-							message.channel:getPermissionOverwriteFor(members[member]):allowPermissions(table.unpack(permissionOverwrites.module.everyone.denied))
+							message.channel:getPermissionOverwriteFor(members[member]):allowPermissions(table.unpack(permissionOverwrites.prj.allowed))
 						end
 					end
 				else
@@ -3727,11 +3737,11 @@ commands["prj"] = {
 					channel:setCategory(message.channel.category.id)
 
 					-- Can't read
-					channel:getPermissionOverwriteFor(message.guild.defaultRole):denyPermissions(table.unpack(permissionOverwrites.module.everyone.denied))
+					channel:getPermissionOverwriteFor(message.guild.defaultRole):denyPermissions(table.unpack(permissionOverwrites.prj.denied))
 
 					for member = 1, counter do
 						-- Can read
-						channel:getPermissionOverwriteFor(members[member]):allowPermissions(table.unpack(permissionOverwrites.module.everyone.denied))
+						channel:getPermissionOverwriteFor(members[member]):allowPermissions(table.unpack(permissionOverwrites.prj.allowed))
 					end
 					message:delete()
 				end
@@ -3832,7 +3842,8 @@ commands["lua"] = {
 			local dataLines = {}
 			local repliedMessages = {}
 
-			local ENV = (hasAuth and devENV or moduleENV) + getLuaEnv()
+			local _ENV = getLuaEnv()
+			local ENV = (hasAuth and devENV or moduleENV) + _ENV
 			if compEnv then
 				-- parameters
 				if not compEnv.parameters then
@@ -3858,6 +3869,8 @@ commands["lua"] = {
 				!string|int
 			]]
 			ENV.discord.messageId = message.id
+
+			ENV.discord.messageContent = message.content
 			--[[Doc
 				"Gets the last message sent before the command. (content, authorId, authorName)"
 				>table
@@ -4023,7 +4036,7 @@ commands["lua"] = {
 				]]
 				ENV.guild = message.guild
 			end
-			
+
 			local getOwner = function(message, name)
 				local owner
 				if isTest == debugAction.cmd then
@@ -4038,7 +4051,7 @@ commands["lua"] = {
 				end
 				return owner
 			end
-			
+
 			ENV.discord.getData = function(userId)
 				assert(userId, "User id can't be nil in discord.getData")
 
@@ -4054,7 +4067,7 @@ commands["lua"] = {
 				userId = tostring(userId)
 				assert(data, "Data can't be nil in discord.saveData")
 				data = tostring(data)
-				assert(#data <= 3000, "Data can't exceed 3000 characters")
+				assert(#data <= 5000, "Data can't exceed 5000 characters")
 
 				local owner = getOwner(message, "saveData")
 
@@ -4102,6 +4115,22 @@ commands["lua"] = {
 				end
 
 				return reactions
+			end
+
+			ENV.discord.getMemberId = function(memberName)
+				assert(memberName, "Member name can't be nil in discord.getMemberId")
+				memberName = tostring(memberName)
+
+				local member = message.guild.members:find(function(m)
+					return m.fullname == memberName or m.nickname == memberName or m.name == memberName
+				end)
+
+				return member and member.id
+			end
+
+			ENV.discord.isMember = function(userId)
+				assert(userId, "Member id cannot be nil in discord.isMember")
+				return message.guild:getMember(userId) ~= nil
 			end
 
 			local func, syntaxErr = load(parameters, '', 't', ENV)
@@ -6025,44 +6054,44 @@ local reactionAdd = function(cached, channel, messageId, hash, userId)
 							body = playingAkinator[userId].lastBody
 						else
 							if answer == #playingAkinator.__REACTIONS then
-								_, body = http.request("GET", "http://" .. playingAkinator[userId].lang .. "/ws/cancel_answer.php?" .. subquery)
+								_, body = http.request("GET", playingAkinator[userId].lang .. "/ws/cancel_answer?" .. subquery)
 							else
-								_, body = http.request("GET", "http://" .. playingAkinator[userId].lang .. "/ws/answer.php?" .. subquery .. "&answer=" .. (answer - 1))
+								_, body = http.request("GET", playingAkinator[userId].lang .. "/ws/answer?" .. subquery .. "&answer=" .. (answer - 1))
 							end
-							body = xml:ParseXmlText(tostring(body))
+							body = json.decode(body)
 						end
 
 						if body and body.RESULT then
-							playingAkinator[userId].data.step = body.RESULT.PARAMETERS.STEP:value()
+							playingAkinator[userId].data.step = body.parameters.step
 
 							if playingAkinator[userId].data.step == 79 then
 								checkAnswer = checkAnswer or (playingAkinator[userId].currentRatio and playingAkinator[userId].currentRatio >= 75)
 							else
-								playingAkinator[userId].currentRatio = (playingAkinator[userId].data.step == 78) and body.RESULT.PARAMETERS.PROGRESSION:value()
+								playingAkinator[userId].currentRatio = (playingAkinator[userId].data.step == 78) and body.parameters.progression
 							end
 
 							local msg = channel:getMessage(messageId)
 
-							if body.RESULT.COMPLETION:value() == "KO - TIMEOUT" then
+							if body.completion == "KO - TIMEOUT" then
 								msg.embed.description = ":x: **TIMEOUT**\n\nUnfortunately you took too much time to answer :confused:"
 								addResultReaction = false
-							elseif not checkAnswer and body.RESULT.COMPLETION:value() == "WARN - NO QUESTION" then
+							elseif not checkAnswer and body.completion == "WARN - NO QUESTION" then
 								msg.embed.description = ":x: **Ugh, you won!**\n\nI did not figure out who your character is :( I dare you to try again!"
 								msg.embed.image = { url = "https://a.ppy.sh/5790113_1464841858.png" }
 							else
-								if not checkAnswer and body.RESULT.PARAMETERS.PROGRESSION:value() < playingAkinator[userId].ratio then
-									msg.embed.description = string.format("```\n%s```\n%s\n\n%s", body.RESULT.PARAMETERS.QUESTION:value(), playingAkinator[userId].cmds, getRate(body.RESULT.PARAMETERS.PROGRESSION:value() / 10))
+								if body.completion == "OK" and not checkAnswer and body.parameters.progression < playingAkinator[userId].ratio then
+									msg.embed.description = string.format("```\n%s```\n%s\n\n%s", body.parameters.question, playingAkinator[userId].cmds, getRate(body.parameters.progression / 10))
 									msg.embed.footer.text = "Question " .. ((playingAkinator[userId].data.step or 0) + 1)
 									update = true
 								else
-									_, body = http.request("GET", "http://" .. playingAkinator[userId].lang .. "/ws/list.php?" .. query .. "&step=" .. playingAkinator[userId].data.step .. "&size=1&max_pic_width=360&max_pic_height=640&mode_question=0")
-									body = xml:ParseXmlText(tostring(body))
+									_, body = http.request("GET", playingAkinator[userId].lang .. "/ws/list?" .. query .. "&step=" .. playingAkinator[userId].data.step .. "&size=1&max_pic_width=360&max_pic_height=640&mode_question=0")
+									body = json.decode(body)
 
 									if not body then
 										channel:send({
 											embed = {
 												color = color.err,
-												description = ":x: | Akinator Error. :( Try again."
+												description = ":x: | Akinator Error. :( Try again later.\n```\n" .. tostring(body.completion) .. "```"
 											}
 										})
 										playingAkinator[userId] = nil
@@ -6070,14 +6099,14 @@ local reactionAdd = function(cached, channel, messageId, hash, userId)
 									end
 
 									msg.embed.author = {
-										name = body.RESULT.PARAMETERS.ELEMENTS.ELEMENT.NAME:value(),
+										name = body.parameters.elements.element.name,
 										icon_url = msg.author.icon_url
 									}
 									msg.embed.title = string.format((checkAnswer and "I bet my hunch is correct... after %s questions!" or "I figured out in the %sth question!"), (playingAkinator[userId].data.step or 0) + (checkAnswer and 1 or 0))
 									msg.embed.image = {
-										url = body.RESULT.PARAMETERS.ELEMENTS.ELEMENT.ABSOLUTE_PICTURE_PATH:value()
+										url = body.parameters.elements.element.absolute_picture_path
 									}
-									msg.embed.description = body.RESULT.PARAMETERS.ELEMENTS.ELEMENT.DESCRIPTION:value()
+									msg.embed.description = body.parameters.elements.element.description
 									msg.embed.footer = nil
 								end
 							end
