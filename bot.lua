@@ -4,7 +4,7 @@ math.randomseed(os.time())
 do
 	local rep = string.rep
 	string.rep = function(str, n)
-		return rep(str, math.min(n, 2000))
+		return rep(str, math.min(n, 5000))
 	end
 end
 
@@ -105,7 +105,6 @@ local channels = {
 	["image"] = "462279141551636500",
 	["map"] = "462279117866401792",
 	["bridge"] = "499635964503785533",
-	["bot2"] = "484182969926418434",
 	["flood"] = "465583146071490560",
 	["guild"] = "462275923354451970",
 	["report"] = "510448208800120842",
@@ -113,6 +112,10 @@ local channels = {
 	["role-color"] = "530752494717108224",
 	["top-activity"] = "530793741909491753",
 	["priv-channels"] = "543094720382107659"
+}
+
+local botIds = {
+	["moon"] = "484182969926418434",
 }
 --[[Doc
 	"Flags of the staff categories."
@@ -392,17 +395,17 @@ local roleColor = {
 	!table
 ]]
 local specialRoleColor = discordia.enums.enum {
-	["462279926532276225"] = "530765845480210462", -- mt
+	--["462279926532276225"] = "530765845480210462", -- mt
 	["462281046566895636"] = "530765846470066186", -- dev
 	["462285151595003914"] = "530765853340467210", -- art
-	["462329326600192010"] = "530765854174871553", -- map
 	["494665355327832064"] = "530765852296085524", -- trad
-	["465631506489016321"] = "530765844406599680", -- fashion
+	["462329326600192010"] = "530765854174871553", -- map
 	["481189370448314369"] = "530765850186219550", -- evt
-	["514913155437035551"] = "530765848823201792", -- write
-	["514913541627838464"] = "530765851314356236", -- math
+	["544202727216119860"] = "544204980706476053", -- sh
 	["526822896987930625"] = "530765847816568832", -- fc
-	["544202727216119860"] = "544204980706476053" -- sh
+	["514913541627838464"] = "530765851314356236", -- math
+	["465631506489016321"] = "530765844406599680", -- fashion
+	["514913155437035551"] = "530765848823201792" -- write
 }
 --[[Doc
 	"Flags for the IDs of the important roles in the server.
@@ -1078,21 +1081,21 @@ do
 			description = "The name of your DeviantArt account."
 		},
 		perms = {
-			index = 4,
+			index = 5,
 			type = "number",
 			min = 0,
 			max = 200,
 			description = "The quantity of high permed maps you currently have."
 		},
 		trad = {
-			index = 5,
+			index = 4,
 			type = "number",
 			min = 0,
 			max = 200,
 			description = "The approximate amount of modules and Lua projects you have helped to translate."
 		},
 		evt = {
-			index = 7,
+			index = 6,
 			type = "number",
 			min = 0,
 			max = 20,
@@ -1133,7 +1136,7 @@ do
 			description = "Your nickname on Transformice."
 		},
 		wattpad = {
-			index = 8,
+			index = 11,
 			type = "string",
 			min = 6,
 			max = 20,
@@ -2768,43 +2771,43 @@ commands["profile"] = {
 		end
 		if hasPermission(permissions.is_trad, p.discord) then
 			icon = icon .. ":earth_americas: "
-			if p.data[5] and table.count(p.data[5]) > 0 then
-				fields[#fields + 1] = p.data[5].trad and {
+			if p.data[4] and table.count(p.data[4]) > 0 then
+				fields[#fields + 1] = p.data[4].trad and {
 					name = ":globe_with_meridians: Modules Translated",
-					value = p.data[5].trad,
+					value = p.data[4].trad,
 					inline = true
 				} or nil
 			end
 		end
 		if hasPermission(permissions.is_map, p.discord) then
 			icon = icon .. "<:p41:463508055577985024> "
-			if p.data[4] and table.count(p.data[4]) > 0 then
-				fields[#fields + 1] = p.data[4].perms and {
+			if p.data[5] and table.count(p.data[5]) > 0 then
+				fields[#fields + 1] = p.data[5].perms and {
 					name = "<:ground:506477349966053386> HighPerm Maps",
-					value = p.data[4].perms,
+					value = p.data[5].perms,
 					inline = true
 				} or nil
 			end
 		end
 		if hasPermission(permissions.is_evt, p.discord) then
 			icon = icon .. "<:idea:559070151278854155> "
-			if p.data[7] and table.count(p.data[7]) > 0 then
-				fields[#fields + 1] = p.data[7].evt and {
+			if p.data[6] and table.count(p.data[6]) > 0 then
+				fields[#fields + 1] = p.data[6].evt and {
 					name = "<:thug:472922464083640320> Events Created",
-					value = p.data[7].evt,
+					value = p.data[6].evt,
 					inline = true
 				} or nil
 			end
 		end
 		if hasPermission(permissions.is_shades, p.discord) then
 			icon = icon .. "<:illuminati:542115872328646666> "
-			if p.data[11] and table.count(p.data[11]) > 0 then
+			if p.data[7] and table.count(p.data[7]) > 0 then
 
 			end
 		end
 		if hasPermission(permissions.is_fc, p.discord) then
 			icon = icon .. "<:fun:559069782469771264> "
-			if p.data[10] and table.count(p.data[10]) > 0 then
+			if p.data[8] and table.count(p.data[8]) > 0 then
 
 			end
 		end
@@ -2816,16 +2819,16 @@ commands["profile"] = {
 		end
 		if hasPermission(permissions.is_fash, p.discord) then
 			icon = icon .. "<:dance:468937918115741718> "
-			if p.data[6] and table.count(p.data[6]) > 0 then
+			if p.data[10] and table.count(p.data[10]) > 0 then
 
 			end
 		end
 		if hasPermission(permissions.is_writer, p.discord) then
 			icon = icon .. ":pencil: "
-			if p.data[8] and table.count(p.data[8]) > 0 then
-				fields[#fields + 1] = p.data[8].wattpad and {
+			if p.data[11] and table.count(p.data[11]) > 0 then
+				fields[#fields + 1] = p.data[11].wattpad and {
 					name = "<:wattpad:517697014541058049> Wattpad",
-					value = "[" .. p.data[8].wattpad .. "](https://www.wattpad.com/user/" .. p.data[8].wattpad .. ")",
+					value = "[" .. p.data[11].wattpad .. "](https://www.wattpad.com/user/" .. p.data[11].wattpad .. ")",
 					inline = true
 				} or nil
 			end
@@ -3870,6 +3873,47 @@ commands["lua"] = {
 			]]
 			ENV.discord.messageId = message.id
 
+			local getMessage = function(message)
+				return {
+					createdAt = message.createdAt,
+					id = message.id,
+					timestamp = message.timestamp,
+					attachment = message.attachment,
+					attachments = message.attachments,
+					author = {
+						createdAt = message.author.createdAt,
+						id = message.author.id,
+						timestamp = message.author.timestamp,
+						avatar = message.author.avatar,
+						avatarURL = message.author.avatarURL,
+						defaultAvatar = message.author.defaultAvatar,
+						defaultAvatarURL = message.author.defaultAvatarURL,
+						discriminator = message.author.discriminator,
+						mentionString = message.author.mentionString,
+						name = message.author.name,
+						fullname = message.author.fullname,
+						username = message.author.username
+					},
+					cleanContent = message.cleanContent,
+					content = message.content,
+					editedTimestamp = message.editedTimestamp,
+					link = message.link,
+					member = {
+						status = message.member.status,
+						deafened = message.member.deafened,
+						highestRole = message.member.highestRole.id,
+						joinedAt = message.member.joinedAt,
+						muted = message.member.muted,
+						name = message.member.name,
+						nickname = message.member.nickname
+					},
+					mentionsEveryone = message.mentionsEveryone,
+					oldContent = message.oldContent
+				}
+			end
+
+			ENV.discord.message = getMessage(message)
+
 			ENV.discord.messageContent = message.content
 			--[[Doc
 				"Gets the last message sent before the command. (content, authorId, authorName)"
@@ -3957,17 +4001,16 @@ commands["lua"] = {
 
 					if type(text) == "table" then
 						if text.content then
-							text.content = string.gsub(text.content, "<[@!&]+(%d+)>", "%1")
+							text.content = string.gsub(text.content, "<[@!&]+(%d+)>", function(id)
+								return (id == message.author.id and "<@" .. id .. ">" or id)
+							end)
 							text.content = string.gsub(text.content, "@here", "@ here")
 							text.content = string.gsub(text.content, "@everyone", "@ everyone")
 						end
-						if isTest ~= debugAction.cmd and text.embed and text.embed.description then
-							text.embed.description = string.gsub(text.embed.description, "<[@!&]+(%d+)>", "%1")
-							text.embed.description = string.gsub(text.embed.description, "@here", "@ here")
-							text.embed.description = string.gsub(text.embed.description, "@everyone", "@ everyone")
-						end
 					else
-						text = string.gsub(text, "<[@!&]+(%d+)>", "%1")
+						text = string.gsub(text, "<[@!&]+(%d+)>", function(id)
+							return (id == message.author.id and "<@" .. id .. ">" or id)
+						end)
 						text = string.gsub(text, "@here", "@ here")
 						text = string.gsub(text, "@everyone", "@ everyone")
 					end
@@ -4016,6 +4059,11 @@ commands["lua"] = {
 				local r = printf(...)
 				dataLines[#dataLines + 1] = r == '' and ' ' or r
 			end
+
+			ENV.printt = function(s)
+				return ENV.print(table.tostring(s))
+			end
+
 			if hasAuth then
 				--[[Doc
 					~
@@ -4067,7 +4115,7 @@ commands["lua"] = {
 				userId = tostring(userId)
 				assert(data, "Data can't be nil in discord.saveData")
 				data = tostring(data)
-				assert(#data <= 5000, "Data can't exceed 5000 characters")
+				assert(#data <= 8000, "Data can't exceed 8000 characters")
 
 				local owner = getOwner(message, "saveData")
 
@@ -4131,6 +4179,25 @@ commands["lua"] = {
 			ENV.discord.isMember = function(userId)
 				assert(userId, "Member id cannot be nil in discord.isMember")
 				return message.guild:getMember(userId) ~= nil
+			end
+
+			ENV.discord.sendPrivateMessage = function(content)
+				assert(content, "Content cannot be nil in discord.sendPrivateMessage")
+				if type(content) ~= "table" then
+					content = tostring(content)
+				end
+
+				local msg = message.author:send(content)
+				return msg and msg.id
+			end
+
+			ENV.discord.getMessage = function(channelId, messageId)
+				assert(channelId, "Channel id cannot be nil in discord.getMessage")
+				assert(messageId, "Message id cannot be nil in discord.getMessage")
+				channelId, messageId = tostring(channelId), tostring(messageId)
+
+				local msg = client:getChannel(channelId):getMessage(messageId)
+				return msg and getMessage(msg) or nil
 			end
 
 			local func, syntaxErr = load(parameters, '', 't', ENV)
@@ -4525,7 +4592,7 @@ commands["gcmd"] = {
 			return sendError(message, "GCMD", "This command cannot be used in for #modules. Use the command `!cmd` instead.")
 		end
 
-		local syntax = "Use `!gcmd 0|1|2 0|1|2 command_name [ script ``` script ``` ] [ value[[command_content]] ] [ title[[command_title]] ] [ description[[command_description]] ]`."
+		local syntax = "Use `!gcmd 0|1|2 0|1|2 command_name [ script ``` script ``` ] [ value[[command_content]] ] [ title[[command_title]] ] [ description[[command_description]] ]`.\n\n[Click here to open the command generator](https://lautenschlager-id.github.io/gcmd-generator.github.io/)"
 
 		if parameters and #parameters > 0 then
 			local script, content, title, description = getCommandFormat(parameters)
@@ -4537,7 +4604,7 @@ commands["gcmd"] = {
 					if authLevel then
 						authLevel = tonumber(authLevel)
 						if authLevel < 3 then
-							if command then
+							if command and #command > 1 and #command < 21 then
 								command = string.lower(command)
 
 								if commands[command] then
@@ -5382,57 +5449,64 @@ channelReactionBehaviors["map"] = {
 
 		if hasPermission(permissions.is_module, member) then
 			--@MoonBot
-			if client:getChannel(channels["bridge"]).guild:getMember(channels["bot2"]).status == "offline" then
+			if hash ~= reactions.x and client:getChannel(channels["bridge"]).guild:getMember(botIds["moon"]).status == "offline" then
 				return message:removeReaction(hash, userId)
 			end
 
-			if string.find(reactions.p41, hash) then
-				local maps = { }
-				for line in string.gmatch(message.content, "[^\n]+") do
-					local cat, code = string.match(line, "^[Pp](%d+) *%- *(@%d+)$")
-					if not cat then
-						cat = "41"
-						code = string.match(line, "^(@%d+)$")
-					end
+			local who = getNick(nickList.mt, member)
 
-					if cat and code then
-						if permMaps[cat] then
-							if not maps[cat] then
-								maps[cat] = { }
-							end
-							maps[cat][#maps[cat] + 1] = code
-						end
-					end
-				end
-
-				message:delete()
-				for k, v in next, maps do
-					client:getChannel(channels["bridge"]):send("%p" .. k .. " " .. table.concat(v, ' '))
-				end
-			elseif hash == reactions.x then
-				message:delete()
+			if hash == reactions.x then
+				message.author:send("Hello, unfortunately your <#462279117866401792> request has been rejected by [<@" .. member.id .. ">] **" .. who .. "**. It may be inappropriate or may have something wrong.\n\nOriginal post:\n\n" .. message.content)
+				return message:delete()
 			end
+
+			local maps = { }
+			for line in string.gmatch(message.content, "[^\n]+") do
+				local cat, code = string.match(line, "^[Pp](%d+) *%- *(@%d+)$")
+				if not cat then
+					cat = "41"
+					code = string.match(line, "^(@%d+)$")
+				end
+
+				if cat and code then
+					if permMaps[cat] then
+						if not maps[cat] then
+							maps[cat] = { }
+						end
+						maps[cat][#maps[cat] + 1] = code
+					end
+				end
+			end
+
+			local count = 0
+			for k, v in next, maps do
+				count = count + (#v * 6)
+				client:getChannel(channels["bridge"]):send("%p" .. k .. " " .. table.concat(v, ' '))
+			end
+
+			message.author:send("Hello, your <#462279117866401792> request has been accepted by [<@" .. member.id .. ">] **" .. who .. "**. The map list must be permed/depermed in _approximately_ " .. count .. " seconds.\n\nOriginal post:\n\n" .. message.content)
+			message:delete()
 		end
 	end
 }
 channelReactionBehaviors["image"] = {
 	f_Add = function(message, channel, hash, userId)
-		--@MoonBot
-		if hash ~= reactions.x and client:getChannel(channels["bridge"]).guild:getMember(channels["bot2"]).status == "offline" then
-			return message:removeReaction(hash, userId)
-		end
-
 		local member = channel.guild:getMember(userId)
 
 		local isMt, isFc = hasPermission(permissions.is_module, member), hasPermission(permissions.is_fc, member)
 		if isMt or isFc then
+			--@MoonBot
+			if hash ~= reactions.x and client:getChannel(channels["bridge"]).guild:getMember(botIds["moon"]).status == "offline" then
+				return message:removeReaction(hash, userId)
+			end
+
 			local sep = (isMt and "|" or "&")
 			local who = getNick(nickList[isMt and "mt" or "fc"], member)
 
 			local img = (message.attachment and message.attachment.url or nil)
 
 			if hash == reactions.x then
-				message.author:send("Hello, unfortunately your **#image-host** request has been rejected by [<@" .. member.id .. ">] **" .. who .. "**. It may be inappropriate, may have copyrights or may have something wrong.\n\nOriginal post:\n\n" .. message.content .. "\n" .. (img or ""))
+				message.author:send("Hello, unfortunately your <#462279141551636500> request has been rejected by [<@" .. member.id .. ">] **" .. who .. "**. It may be inappropriate, may have copyrights or may have something wrong.\n\nOriginal post:\n\n" .. message.content .. "\n" .. (img or ""))
 				return message:delete()
 			end
 
@@ -5671,6 +5745,7 @@ client:on("ready", function()
 
 	devENV = setmetatable({}, {
 		__index = setmetatable({
+			botIds = botIds,
 			boundaries = boundaries,
 
 			channelCommandBehaviors = channelCommandBehaviors,
@@ -5946,8 +6021,8 @@ messageDelete = function(message, skipChannelActivity)
 				addServerActivity(message.member, true)
 			end
 		end
-		-- Less than 10 seconds = log
-		if (os.time() - 10) < t then
+		-- Less than 20 seconds = log
+		if (os.time() - 20) < t then
 			if message.content then
 				local d = string.match(message.content, "^!?(%S+)")
 				if d then
