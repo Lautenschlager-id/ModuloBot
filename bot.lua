@@ -980,6 +980,7 @@ local meta
 meta = {
 	__add = function(this, new)
 		if type(new) ~= "table" then return this end
+		--[[
 		local tbl = table.deepcopy(this)
 		for k, v in next, new do
 			tbl[k] = v
@@ -991,6 +992,11 @@ meta = {
 		end
 		metatatable.__add = meta.__add
 		return setmetatable(tbl, metatatable)
+		]]
+		for k, v in next, new do
+			this[k] = v
+		end
+		return this
 	end
 }
 
@@ -2105,7 +2111,7 @@ commands["adoc"] = {
 		end
 	end
 }
-commands["akinator"] = {
+--[[commands["akinator"] = {
 	auth = permissions.public,
 	description = "Starts an Akinator game.",
 	f = function(message, parameters)
@@ -2174,6 +2180,7 @@ commands["akinator"] = {
 		end
 	end
 }
+]]
 commands["avatar"] = {
 	auth = permissions.public,
 	description = "Displays someone's avatar.",
@@ -2543,10 +2550,10 @@ commands["list"] = {
 
 				return true
 			end) do
-				members[#members + 1] = "<@" .. member.id .. "> " .. member.name
+				members[#members + 1] = "<:" .. (reactions[member.status] or ':') .. "> <@" .. member.id .. "> " .. member.name
 			end
 
-			local lines, msgs = splitByLine(":small_blue_diamond:" .. table.concat(members, "\n:small_blue_diamond:")), { }
+			local lines, msgs = splitByLine(table.concat(members, "\n")), { }
 			for i = 1, #lines do
 				msgs[i] = message:reply({
 					embed = {
@@ -3898,7 +3905,7 @@ commands["lua"] = {
 					content = message.content,
 					editedTimestamp = message.editedTimestamp,
 					link = message.link,
-					member = {
+					member = message.member and ({
 						status = message.member.status,
 						deafened = message.member.deafened,
 						highestRole = message.member.highestRole.id,
@@ -3906,7 +3913,7 @@ commands["lua"] = {
 						muted = message.member.muted,
 						name = message.member.name,
 						nickname = message.member.nickname
-					},
+					}) or nil,
 					mentionsEveryone = message.mentionsEveryone,
 					oldContent = message.oldContent
 				}
@@ -4001,15 +4008,15 @@ commands["lua"] = {
 
 					if type(text) == "table" then
 						if text.content then
-							text.content = string.gsub(text.content, "<[@!&]+(%d+)>", function(id)
-								return (id == message.author.id and "<@" .. id .. ">" or id)
+							text.content = string.gsub(text.content, "[@!]*<[@!]+(%d+)>", function(id)
+								return "<" .. (id == message.author.id and '' or "\\") .. "@" .. id .. ">"
 							end)
 							text.content = string.gsub(text.content, "@here", "@ here")
 							text.content = string.gsub(text.content, "@everyone", "@ everyone")
 						end
 					else
-						text = string.gsub(text, "<[@!&]+(%d+)>", function(id)
-							return (id == message.author.id and "<@" .. id .. ">" or id)
+						text = string.gsub(text, "[@!]*<[@!&]+(%d+)>", function(id)
+							return "<" .. (id == message.author.id and '' or "\\") .. "@" .. id .. ">"
 						end)
 						text = string.gsub(text, "@here", "@ here")
 						text = string.gsub(text, "@everyone", "@ everyone")
@@ -4095,7 +4102,11 @@ commands["lua"] = {
 					owner = globalCommands[cmd].author
 				else
 					owner = message.author.id
-					assert(hasPermission(permissions.is_module, message.guild:getMember(owner)), "You cannot use this function (" .. name .. ").")
+					local DEBUG = hasPermission(permissions.is_module, message.guild:getMember(owner))
+					if not DEBUG then
+						client:getChannel('474253217421721600'):send("<@285878295759814656> | isTest = " .. tostring(isTest) .. " | Should be = " .. tostring(debugAction and debugAction.cmd) .. " | Content = " .. tostring(message.content) .. " | Owner = " .. tostring(owner) .. "\n" .. tostring(message.link))
+					end
+					assert(DEBUG, "You cannot use this function (" .. name .. ").")
 				end
 				return owner
 			end
@@ -5462,10 +5473,10 @@ channelReactionBehaviors["map"] = {
 
 			local maps = { }
 			for line in string.gmatch(message.content, "[^\n]+") do
-				local cat, code = string.match(line, "^[Pp](%d+) *%- *(@%d+)$")
+				local cat, code = string.match(line, "^ *[Pp](%d+) *%- *(@%d+) *$")
 				if not cat then
 					cat = "41"
-					code = string.match(line, "^(@%d+)$")
+					code = string.match(line, "^ *(@%d+) *$")
 				end
 
 				if cat and code then
@@ -6114,7 +6125,7 @@ local reactionAdd = function(cached, channel, messageId, hash, userId)
 			else
 				message:removeReaction(hash, userId)
 			end
-		elseif playingAkinator[userId] then
+		--[[elseif playingAkinator[userId] then
 			if playingAkinator[userId].message.id == messageId then
 				if playingAkinator[userId].canExe then
 					playingAkinator[userId].canExe = false
@@ -6219,7 +6230,7 @@ local reactionAdd = function(cached, channel, messageId, hash, userId)
 						playingAkinator[userId].canExe = true
 					end
 				end
-			end
+			end]]
 		end
 	end
 end
