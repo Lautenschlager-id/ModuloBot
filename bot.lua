@@ -1211,6 +1211,8 @@ local cmdData = { }
 ]]
 local serverActivity = { }
 
+local title = { _id = { } }
+
 --[[ Functions ]]--
 --[[Doc
 	"Encodes a string in the HTML format. Escapes all the characters."
@@ -1292,13 +1294,13 @@ local getCommandTable = function(message, script, content, title, description)
 	end
 
 	local embed = {
-		title = title and base64.encode(title) or nil,
-		description = content and base64.encode(string.trim(content)) or nil
+		title = title or nil,
+		description = content and string.trim(content) or nil
 	}
 
 	local image = message.attachment and message.attachment.url
 	if image then
-		embed.image = { url = base64.encode(image) }
+		embed.image = { url = image }
 	else
 		if (not embed.title or embed.title == '') and (not embed.description or embed.description == '') and (not script or #script < 4) then
 			return "You cannot create an empty command."
@@ -1306,9 +1308,9 @@ local getCommandTable = function(message, script, content, title, description)
 	end
 
 	return {
-		desc = description and base64.encode(string.trim(description)) or nil,
+		desc = description and string.trim(description) or nil,
 		embed = embed,
-		script = script and base64.encode(script) or nil,
+		script = script or nil,
 	}
 end
 --[[Doc
@@ -1320,8 +1322,8 @@ end
 ]]
 local getDatabase = function(fileName, raw)
 	local head, body = http.request("GET", "http://discbotdb.000webhostapp.com/get?k=" .. tokens.discdb .. "&f=" .. fileName)
-	body = body:gsub("%(%(12%)%)", "+")
-
+	body = string.gsub(body, "&lt;", '<')
+	
 	local out = (raw and body or json.decode(body))
 
 	if not body or not out then
@@ -1581,9 +1583,12 @@ end
 	>boolean
 ]]
 local save = function(fileName, db, raw)
+	db = encodeUrl(raw and tostring(db) or json.encode(db))
+	db = string.gsub(db, '<', "&lt;")
+
 	local http, body = http.request("POST", "http://discbotdb.000webhostapp.com/set?k=" .. tokens.discdb .. "&f=" .. fileName, {
 		{ "Content-Type", "application/x-www-form-urlencoded" }
-	}, "d=" .. (raw and tostring(db) or json.encode(db)):gsub("%+", "((12))"))
+	}, "d=" .. db)
 
 	return body == "true"
 end
@@ -1831,6 +1836,7 @@ local getLuaEnv = function()
 		string = table.copy(string),
 
 		table = table.copy(table),
+		title = table.deepcopy(title),
 
 		utf8 = table.copy(utf8),
 
@@ -2410,7 +2416,7 @@ commands["help"] = {
 				local icon = ((v > permissions.public) and ":small_blue_diamond:" or ":small_orange_diamond:")
 				table.sort(cmds[v], function(c1, c2) return c1.cmd < c2.cmd end)
 				for j = 1, #cmds[v] do
-					cmds[v][j] = icon .. prefix .. cmds[v][j].cmd .. "** " .. (cmds[v][j].data.desc and base64.decode(cmds[v][j].data.desc) or '')
+					cmds[v][j] = icon .. prefix .. cmds[v][j].cmd .. "** " .. (cmds[v][j].data.desc or '')
 				end
 				keys[k] = table.concat(cmds[v], '\n')
 			end
@@ -2435,7 +2441,7 @@ commands["help"] = {
 
 							description = data.description
 							if not description then
-								description = data.desc and base64.decode(data.desc) or nil
+								description = data.desc or nil
 							end
 							description = description and ("- " .. description) or ''
 
@@ -4116,10 +4122,7 @@ commands["lua"] = {
 
 				local owner = getOwner(message, "getData")
 
-				if cmdData[owner] then
-					return cmdData[owner][userId] and base64.decode(cmdData[owner][userId]) or ''
-				end
-				return ''
+				return (cmdData[owner] and cmdData[owner][userId] or '')
 			end
 			ENV.discord.saveData = function(userId, data)
 				assert(userId, "User id can't be nil in discord.saveData")
@@ -4133,7 +4136,7 @@ commands["lua"] = {
 				if not cmdData[owner] then
 					cmdData[owner] = { }
 				end
-				cmdData[owner][userId] = (data ~= '' and base64.encode(data) or nil)
+				cmdData[owner][userId] = (data ~= '' and data or nil)
 				return true
 			end
 
@@ -5819,6 +5822,28 @@ client:on("ready", function()
 	end
 	moons:close()
 
+	-- Get title list
+	local counter, male, female = 0
+	local _, body = http.request("GET", "http://transformice.com/langues/tfz_en")
+	body = require("miniz").inflate(body, 1) -- Decompress
+	for titleId, titleName in string.gmatch(body, "¤T_(%d+)=([^¤]+)") do
+		titleId = tonumber(titleId)
+
+		titleName = string.gsub(titleName, "<.->", '') -- Removes HTML
+		titleName = string.gsub(titleName, "[%*%_~]", "\\%1") -- Escape special characters
+		if string.find(titleName, '|', nil, true) then -- Male / Female
+			-- Male version
+			male = string.gsub(titleName, "%((.-)|.-%)", function(s) return s end)
+			-- Female version
+			female = string.gsub(titleName, "%(.-|(.-)%)", function(s) return s end)
+
+			titleName = { male, female } -- id % 2 + 1
+		end
+		counter = counter + 1
+		title[counter] = { id = titleId, name = titleName }
+		title._id[titleId] = counter
+	end
+
 	currentAvatar = moonPhase()
 	client:setAvatar(botAvatars[currentAvatar])
 	client:setGame("Prefix !")
@@ -5855,10 +5880,10 @@ local globalCommandCall = function(cmd, message, parameters)
 
 	local embed = table.copy(cmd.embed)
 
-	embed.title = base64.decode(embed.title)
-	embed.description = base64.decode(embed.description)
+	embed.title = embed.title
+	embed.description = embed.description
 	if embed.image then
-		embed.image.url = base64.decode(embed.image.url)
+		embed.image.url = embed.image.url
 	end
 
 	local msg
@@ -5870,7 +5895,7 @@ local globalCommandCall = function(cmd, message, parameters)
 
 	local msgs
 	if cmd.script then
-		msgs = commands["lua"].f(message, "`" .. base64.decode(cmd.script) .. "`", nil, debugAction.cmd, { parameters = parameters })
+		msgs = commands["lua"].f(message, "`" .. cmd.script .. "`", nil, debugAction.cmd, { parameters = parameters })
 	end
 
 	if msgs then
