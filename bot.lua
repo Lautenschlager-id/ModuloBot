@@ -30,6 +30,8 @@ local binBase64 = require("Content/binBase64")
 local imageHandler = require("Content/imageHandler")
 local utf8 = require("Content/utf8")
 
+local miniz = require("miniz")
+
 require("Content/functions")
 
 --[[Doc
@@ -964,7 +966,7 @@ local devENV, moduleENV = {}, {}
 	"The restrictions for the admin's environment in **!lua**."
 	!table
 ]]
-local devRestrictions = { "_G", "error", "getfenv", "setfenv" }
+local devRestrictions = { "_G", "getfenv", "setfenv" }
 --[[Doc
 	"The restrictions for the developers' environment in **!lua**."
 	!table
@@ -1293,25 +1295,23 @@ local getCommandTable = function(message, script, content, title, description)
 		end
 	end
 
-	local embed = {
-		title = title or nil,
-		description = content and string.trim(content) or nil
-	}
-
-	local image = message.attachment and message.attachment.url
-	if image then
-		embed.image = { url = image }
-	else
-		if (not embed.title or embed.title == '') and (not embed.description or embed.description == '') and (not script or #script < 4) then
+	title = ((title and title ~= '') and base64.encode(string.trim(title)) or nil)
+	description = ((description and description ~= '') and base64.encode(string.trim(description)) or nil)
+	content = ((content and content ~= '') and base64.encode(string.trim(content)) or nil)
+	local url = ((message.attachment and message.attachment.url) and base64.encode(message.attachment.url) or nil)
+	if not url then
+		if not title and not description and (script and #script < 4) then
 			return "You cannot create an empty command."
 		end
 	end
 
 	return {
-		desc = description and string.trim(description) or nil,
-		embed = embed,
-		script = script or nil,
-	}
+		info = description, -- About the command
+		script = (script and base64.encode(script) or nil), -- To be executed during the command call
+		title = title, -- Embed title
+		desc = content, -- Embed description
+		url = url -- Embed image
+	}	
 end
 --[[Doc
 	~
@@ -1322,8 +1322,8 @@ end
 ]]
 local getDatabase = function(fileName, raw)
 	local head, body = http.request("GET", "http://discbotdb.000webhostapp.com/get?k=" .. tokens.discdb .. "&f=" .. fileName)
-	body = string.gsub(body, "&lt;", '<')
-	
+	body = string.gsub(body, "%(%(12%)%)", '+')
+
 	local out = (raw and body or json.decode(body))
 
 	if not body or not out then
@@ -1583,8 +1583,8 @@ end
 	>boolean
 ]]
 local save = function(fileName, db, raw)
-	db = encodeUrl(raw and tostring(db) or json.encode(db))
-	db = string.gsub(db, '<', "&lt;")
+	db = (raw and tostring(db) or json.encode(db))
+	db = string.gsub(db, "%+", "((12))")
 
 	local http, body = http.request("POST", "http://discbotdb.000webhostapp.com/set?k=" .. tokens.discdb .. "&f=" .. fileName, {
 		{ "Content-Type", "application/x-www-form-urlencoded" }
@@ -2416,7 +2416,7 @@ commands["help"] = {
 				local icon = ((v > permissions.public) and ":small_blue_diamond:" or ":small_orange_diamond:")
 				table.sort(cmds[v], function(c1, c2) return c1.cmd < c2.cmd end)
 				for j = 1, #cmds[v] do
-					cmds[v][j] = icon .. prefix .. cmds[v][j].cmd .. "** " .. (cmds[v][j].data.desc or '')
+					cmds[v][j] = icon .. prefix .. cmds[v][j].cmd .. "** " .. (cmds[v][j].data.info and base64.decode(cmds[v][j].data.info) or '')
 				end
 				keys[k] = table.concat(cmds[v], '\n')
 			end
@@ -2439,10 +2439,7 @@ commands["help"] = {
 						if authIds[message.author.id] or (data.auth and hasPermission(data.auth, message.member, message)) then
 							icon = (not data.auth and ":gear: " or (data.auth > permissions.public) and ":small_blue_diamond: " or ":small_orange_diamond: ")
 
-							description = data.description
-							if not description then
-								description = data.desc or nil
-							end
+							description = data.description or (data.info and base64.decode(data.info))
 							description = description and ("- " .. description) or ''
 
 							index = data.auth or 666
@@ -4096,6 +4093,24 @@ commands["lua"] = {
 					!Discordia.Guild
 				]]
 				ENV.guild = message.guild
+			else
+				if not isTest then
+					local s = (hasPermission(permissions.is_module, message.member) and 10 or 5)
+					local runtime = os.time() + s
+					local snippet = 'if os.time()>' .. runtime .. ' then error(tostring(___RUNTIME_STR____),2) end '
+
+					local hasChanged, change = false
+					for _, pattern in next, { "while.-do[\n\r ]+", "repeat[\n\r ]+", "for .-=.- do[\n\r ]+", "for .- in .- do[\n\r ]+", "function[\n\r ]*%S-[\n\r ]-%(.-%)[\n\r ]+" } do
+						parameters, change = string.gsub(parameters, pattern, "%1 " .. snippet)
+						if (change and change > 0) and not hasChanged then
+							hasChanged = true
+						end
+					end
+
+					if hasChanged then
+						parameters = "local ___RUNTIME_STR____ = \"Your code has exceeded the runtime limit of " .. s .. "s.\"" .. parameters
+					end
+				end
 			end
 
 			local getOwner = function(message, name)
@@ -4122,7 +4137,7 @@ commands["lua"] = {
 
 				local owner = getOwner(message, "getData")
 
-				return (cmdData[owner] and cmdData[owner][userId] or '')
+				return ((cmdData[owner] and cmdData[owner][userId]) and base64.decode(cmdData[owner][userId]) or '')
 			end
 			ENV.discord.saveData = function(userId, data)
 				assert(userId, "User id can't be nil in discord.saveData")
@@ -4136,7 +4151,7 @@ commands["lua"] = {
 				if not cmdData[owner] then
 					cmdData[owner] = { }
 				end
-				cmdData[owner][userId] = (data ~= '' and data or nil)
+				cmdData[owner][userId] = (data ~= '' and base64.encode(data) or nil)
 				return true
 			end
 
@@ -4240,7 +4255,7 @@ commands["lua"] = {
 					embed = {
 						color = color.lua_err,
 						title = "[" .. message.member.name .. ".Lua] Error : RuntimeError",
-						description = "```\n" .. runtimeErr .. "```"
+						description = "```\n" .. tostring(runtimeErr) .. "```"
 					}
 				})
 				return
@@ -5878,24 +5893,20 @@ local globalCommandCall = function(cmd, message, parameters)
 		end
 	end
 
-	local embed = table.copy(cmd.embed)
-
-	embed.title = embed.title
-	embed.description = embed.description
-	if embed.image then
-		embed.image.url = embed.image.url
-	end
-
 	local msg
-	if embed.title or embed.description or embed.image then
+	if cmd.title or cmd.desc or cmd.url then
 		msg = message:reply({
-			embed = embed
+			embed = {
+				title = (cmd.title and base64.decode(cmd.title) or nil),
+				description = (cmd.desc and base64.decode(cmd.desc) or nil),
+				image = (cmd.url and { url = base64.decode(cmd.url) } or nil)
+			}
 		})
 	end
 
 	local msgs
 	if cmd.script then
-		msgs = commands["lua"].f(message, "`" .. cmd.script .. "`", nil, debugAction.cmd, { parameters = parameters })
+		msgs = commands["lua"].f(message, "`" .. base64.decode(cmd.script) .. "`", nil, debugAction.cmd, { parameters = parameters })
 	end
 
 	if msgs then
