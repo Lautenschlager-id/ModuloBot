@@ -113,7 +113,8 @@ local channels = {
 	["chat-log"] = "520231441985175572",
 	["role-color"] = "530752494717108224",
 	["top-activity"] = "530793741909491753",
-	["priv-channels"] = "543094720382107659"
+	["priv-channels"] = "543094720382107659",
+	["suggestions"] = "582605483836440606"
 }
 
 local botIds = {
@@ -181,7 +182,9 @@ local reactions = {
 	offline = "offline:456197711457419276",
 	p5 = "p5:468937377981923339",
 	yes = "\xE2\x9C\x85",
-	arrowUp = "\xE2\x8F\xAB"
+	arrowUp = "\xE2\x8F\xAB",
+	thumbsup = "\xF0\x9F\x91\x8D",
+	thumbsdown = "\xF0\x9F\x91\x8E"
 }
 --[[Doc
 	"Flags of the bytes of the flag emojis of each community in Transformice."
@@ -953,13 +956,13 @@ local commands = {}
 	"Bot behavior in specific channels. (IO)"
 	!table
 ]]
-local channelCommandBehaviors = {}
+local channelBehavior = {}
 --[[Doc
 	~
 	"Bot behavior in specific channels when an reaction is added or removed."
 	!table
 ]]
-local channelReactionBehaviors = {}
+local channelReactionBehavior = {}
 
 local devENV, moduleENV = {}, {}
 --[[Doc
@@ -1025,10 +1028,10 @@ local lastMemberTexting = {}
 local activeMembers = {}
 local memberTimers = {}
 --[[Doc
-	"The profile data of the staff members in the server."
+	"The profile data of the members in the server."
 	!table
 ]]
-local staffMembers = {}
+local memberProfiles = {}
 --[[
 	"Profile structure for the **!edit** command."
 	!table
@@ -1133,7 +1136,7 @@ do
 					x = x .. "#0000"
 				end
 
-				for k, v in next, staffMembers do
+				for k, v in next, memberProfiles do
 					if v.nickname == x then
 						return false
 					end
@@ -1253,6 +1256,34 @@ local expToLvl = function(xp)
 	return level, remain, need
 end
 
+local fixHtml
+fixHtml = function(str, link)
+	link = link or ''
+	str = str:gsub("<(.-)>(.-)</%1>", function(html, content)
+		if html == 'b' then
+        	return "**" .. fixHtml(content, link) .. "**"
+        elseif html == 'i' then
+        	return "*" .. fixHtml(content, link) .. "*"
+        elseif html == 'u' then
+        	return "__" .. fixHtml(content, link) .. "__"
+		end
+		return fixHtml(content, link)
+	end)
+	str = str:gsub("<a href=\"(.-)\".->(.-)</a>", function(href, content)
+		if string.sub(href, 1, 1) == '/' then
+			href = link .. href
+		end
+		return "[" .. content .. "](" .. string.gsub(href, "%)", "\\)") .. ")"
+	end)
+	str = str:gsub("&amp;", '&')
+	str = str:gsub("&lt;", '<')
+	str = str:gsub("&quot;", '\"')
+	str = str:gsub("&#(%d+);", string.char)
+	str = str:gsub("<br ?/?>", '\n')
+
+	return str
+end
+
 --[[Doc
 	"Returns the years between the current date and another date."
 	@date string
@@ -1295,10 +1326,10 @@ local getCommandTable = function(message, script, content, title, description)
 		end
 	end
 
-	title = ((title and title ~= '') and base64.encode(string.trim(title)) or nil)
-	description = ((description and description ~= '') and base64.encode(string.trim(description)) or nil)
-	content = ((content and content ~= '') and base64.encode(string.trim(content)) or nil)
-	local url = ((message.attachment and message.attachment.url) and base64.encode(message.attachment.url) or nil)
+	title = ((title and title ~= '') and string.trim(title) or nil)
+	description = ((description and description ~= '') and string.trim(description) or nil)
+	content = ((content and content ~= '') and string.trim(content) or nil)
+	local url = ((message.attachment and message.attachment.url) and message.attachment.url or nil)
 	if not url then
 		if not title and not description and (script and #script < 4) then
 			return "You cannot create an empty command."
@@ -1307,7 +1338,7 @@ local getCommandTable = function(message, script, content, title, description)
 
 	return {
 		info = description, -- About the command
-		script = (script and base64.encode(script) or nil), -- To be executed during the command call
+		script = (script or nil), -- To be executed during the command call
 		title = title, -- Embed title
 		desc = content, -- Embed description
 		url = url -- Embed image
@@ -1320,10 +1351,13 @@ end
 	@raw boolean*
 	>table|string
 ]]
-local getDatabase = function(fileName, raw)
+local getDatabase = function(fileName, raw, decodeBase64)
 	local head, body = http.request("GET", "http://discbotdb.000webhostapp.com/get?k=" .. tokens.discdb .. "&f=" .. fileName)
 	body = string.gsub(body, "%(%(12%)%)", '+')
 
+	if decodeBase64 then
+		body = base64.decode(body)
+	end
 	local out = (raw and body or json.decode(body))
 
 	if not body or not out then
@@ -1582,8 +1616,11 @@ end
 	@db table|string
 	>boolean
 ]]
-local save = function(fileName, db, raw)
+local save = function(fileName, db, raw, encodeBase64)
 	db = (raw and tostring(db) or json.encode(db))
+	if encodeBase64 then
+		db = base64.encode(db)
+	end
 	db = string.gsub(db, "%+", "((12))")
 
 	local http, body = http.request("POST", "http://discbotdb.000webhostapp.com/set?k=" .. tokens.discdb .. "&f=" .. fileName, {
@@ -1591,6 +1628,13 @@ local save = function(fileName, db, raw)
 	}, "d=" .. db)
 
 	return body == "true"
+end
+
+local saveGlobalCommands = function()
+	local toJson = base64.encode(json.encode(globalCommands))
+	local _1 = save("b_gcommands", string.sub(toJson, 1, 70000), true)
+	local _2 = save("b_gcommands_2", string.sub(toJson, 70001), true)
+	return _1, _2
 end
 --[[Doc
 	~
@@ -1794,6 +1838,8 @@ local getLuaEnv = function()
 		envTfm = table.deepcopy(envTfm),
 		expToLvl = expToLvl,
 
+		fixHtml = fixHtml,
+
 		getAge = getAge,
 		getCommandFormat = getCommandFormat,
 		getCommandTable = getCommandTable,
@@ -1807,6 +1853,7 @@ local getLuaEnv = function()
 
 		logColor = table.copy(logColor),
 
+		memberProfiles = table.deepcopy(memberProfiles),
 		math = table.copy(math),
 		meta = table.copy(meta),
 		moduleRestrictions = table.copy(moduleRestrictions),
@@ -1832,7 +1879,6 @@ local getLuaEnv = function()
 		specialRoleColor = table.copy(specialRoleColor),
 		splitByChar = splitByChar,
 		splitByLine = splitByLine,
-		staffMembers = table.deepcopy(staffMembers),
 		string = table.copy(string),
 
 		table = table.copy(table),
@@ -2389,6 +2435,127 @@ commands["doc"] = {
 		end
 	end
 }
+commands["edit"] = {
+	auth = permissions.public,
+	description = "Edits the data of your profile.",
+	f = function(message, parameters)
+		local syntax = "Use `!edit field value` or `!edit field` to remove the value.\nThe available fields are:\n" .. concat(profileStruct, '', function(index, value)
+			if not value.index then
+				return "**" .. index .. "** - " .. value.description .. "\n"
+			else
+				if message.member:hasRole(roles[roleFlags[value.index]]) then
+					return "**" .. index .. "** - " .. value.description .. "\n"
+				end
+				return ''
+			end
+		end)
+
+		if parameters and #parameters > 0 then
+			local field, value = string.match(parameters, "^(%S+)[\n ]+(.+)$")
+
+			if field and profileStruct[field] then
+				if profileStruct[field].index and not message.member:hasRole(roles[roleFlags[profileStruct[field].index]]) then
+					return sendError(message, "EDIT", "Field authorization denied.", "You can not update this field because you do not have the role `" .. string.upper(roleFlags[profileStruct[field].index]) .. "`.")
+				end
+
+				local isNumber = profileStruct[field].type == "number"
+				if isNumber then
+					value = tonumber(value)
+					if not value then
+						return sendError(message, "EDIT", "The value must be a number.")
+					end
+					value = math.floor(value)
+				end
+
+				if profileStruct[field].min and (isNumber and value or #value) < profileStruct[field].min then
+					return sendError(message, "EDIT", "Invalid value.", "The value or value length must be greater than or equal to **" .. profileStruct[field].min .. "**.")
+				end
+				if profileStruct[field].max and (isNumber and value or #value) > profileStruct[field].max then
+					return sendError(message, "EDIT", "Invalid value.", "The value or value length must be less than or equal to **" .. profileStruct[field].max .. "**.")
+				end
+
+				if profileStruct[field].format then
+					local ok = true
+					if type(profileStruct[field].format) == "table" then
+						for k, v in next, profileStruct[field].format do
+							if not string.format(value, v) then
+								ok = false
+								break
+							end
+						end
+					else
+						ok = not not string.format(value, profileStruct[field].format)
+					end
+
+					if not ok then
+						return sendError(message, "EDIT", "Invalid value.", "The format of this field requires another value format.")
+					end
+				end
+
+				if profileStruct[field].valid then
+					local success, fix = profileStruct[field].valid(value)
+					if not success then
+						return sendError(message, "EDIT", "Invalid value.", "This value is invalid or does not exist.")
+					elseif fix then
+						value = fix
+					end
+				end
+
+				if not memberProfiles[message.author.id] then
+					memberProfiles[message.author.id] = { }
+				end
+				local old_value
+				if profileStruct[field].index then
+					if not memberProfiles[message.author.id][profileStruct[field].index] then
+						memberProfiles[message.author.id][profileStruct[field].index] = { }
+					end
+					old_value = memberProfiles[message.author.id][profileStruct[field].index][field]
+					memberProfiles[message.author.id][profileStruct[field].index][field] = value
+				else
+					old_value = memberProfiles[message.author.id][field]
+					memberProfiles[message.author.id][field] = value
+				end
+
+				message.author:send({
+					embed = {
+						color = color.interaction,
+						title = "Profile Data Updated!",
+						description = "You updated the field `" .. field .. "` with the value `" .. value .. "`" .. (old_value and ("\nIts value was, previously, `" .. old_value .. "`") or "")
+					}
+				})
+				message:delete()
+			else
+				if profileStruct[parameters] then
+					local old_value
+					if profileStruct[parameters].index then
+						old_value = memberProfiles[message.author.id][profileStruct[parameters].index]
+						if old_value then
+							old_value = old_value[parameters]
+						end
+
+						memberProfiles[message.author.id][profileStruct[parameters].index][parameters] = nil
+					else
+						old_value = memberProfiles[message.author.id][parameters]
+						memberProfiles[message.author.id][parameters] = nil
+					end
+
+					message.author:send({
+						embed = {
+							color = color.interaction,
+							title = "Profile Data Updated!",
+							description = "You removed the field `" .. parameters .. "`" .. (old_value and (" that had the value `" .. old_value .. "`") or "")
+						}
+					})
+					message:delete()
+				else
+					sendError(message, "EDIT", "Invalid field.", syntax)
+				end
+			end
+		else
+			sendError(message, "EDIT", "Invalid or missing parameters.", syntax)
+		end
+	end
+}
 commands["ghelp"] = {
 	auth = permissions.public,
 	f = function(message)
@@ -2416,7 +2583,7 @@ commands["help"] = {
 				local icon = ((v > permissions.public) and ":small_blue_diamond:" or ":small_orange_diamond:")
 				table.sort(cmds[v], function(c1, c2) return c1.cmd < c2.cmd end)
 				for j = 1, #cmds[v] do
-					cmds[v][j] = icon .. prefix .. cmds[v][j].cmd .. "** " .. (cmds[v][j].data.info and base64.decode(cmds[v][j].data.info) or '')
+					cmds[v][j] = icon .. prefix .. cmds[v][j].cmd .. "** " .. (cmds[v][j].data.info or '')
 				end
 				keys[k] = table.concat(cmds[v], '\n')
 			end
@@ -2439,7 +2606,7 @@ commands["help"] = {
 						if authIds[message.author.id] or (data.auth and hasPermission(data.auth, message.member, message)) then
 							icon = (not data.auth and ":gear: " or (data.auth > permissions.public) and ":small_blue_diamond: " or ":small_orange_diamond: ")
 
-							description = data.description or (data.info and base64.decode(data.info))
+							description = data.description or data.info
 							description = description and ("- " .. description) or ''
 
 							index = data.auth or 666
@@ -2706,17 +2873,13 @@ commands["profile"] = {
 		if found then
 			member = message.guild:getMember(parameters)
 			if member then
-				if hasPermission(permissions.has_power, member) then
-					if not staffMembers[member.id] then
-						staffMembers[member.id] = { }
-					end
-					p = {
-						discord = member,
-						data = staffMembers[member.id]
-					}
-				else
-					return sendError(message, "PROFILE", "User '" .. member.name .. "' has no profile.")
+				if not memberProfiles[member.id] then
+					memberProfiles[member.id] = { }
 				end
+				p = {
+					discord = member,
+					data = memberProfiles[member.id]
+				}
 			end
 		end
 		if not found or not member then
@@ -2737,110 +2900,115 @@ commands["profile"] = {
 			inline = true
 		} or nil
 
-		if hasPermission(permissions.is_module, p.discord) then
-			icon = icon .. "<:wheel:456198795768889344> "
-			if p.data[1] and table.count(p.data[1]) > 0 then
-				fields[#fields + 1] = p.data[1].since and {
-					name = ":calendar: MT Member since",
-					value = p.data[1].since,
-					inline = true
-				} or nil
+		if p.discord.bot then
+			icon = icon .. ":robot: "
+		end
+		if hasPermission(permissions.has_power, p.discord) then	
+			if hasPermission(permissions.is_module, p.discord) then
+				icon = icon .. "<:wheel:456198795768889344> "
+				if p.data[1] and table.count(p.data[1]) > 0 then
+					fields[#fields + 1] = p.data[1].since and {
+						name = ":calendar: MT Member since",
+						value = p.data[1].since,
+						inline = true
+					} or nil
 
-				fields[#fields + 1] = p.data[1].hosting and {
-					name = ":house: Hosted modules",
-					value = p.data[1].hosting,
-					inline = true
-				} or nil
+					fields[#fields + 1] = p.data[1].hosting and {
+						name = ":house: Hosted modules",
+						value = p.data[1].hosting,
+						inline = true
+					} or nil
+				end
 			end
-		end
-		if hasPermission(permissions.is_dev, p.discord) then
-			icon = icon .. "<:lua:468936022248390687> "
-			if p.data[2] and table.count(p.data[2]) > 0 then
-				fields[#fields + 1] = p.data[2].modules and {
-					name = ":gear: Modules",
-					value = p.data[2].modules,
-					inline = true
-				} or nil
+			if hasPermission(permissions.is_dev, p.discord) then
+				icon = icon .. "<:lua:468936022248390687> "
+				if p.data[2] and table.count(p.data[2]) > 0 then
+					fields[#fields + 1] = p.data[2].modules and {
+						name = ":gear: Modules",
+						value = p.data[2].modules,
+						inline = true
+					} or nil
 
-				fields[#fields + 1] = p.data[2].github and {
-					name = "<:github:506473892689215518> GitHub",
-					value = "[" .. p.data[2].github .. "](https://github.com/" .. p.data[2].github .. ")",
-					inline = true
-				} or nil
+					fields[#fields + 1] = p.data[2].github and {
+						name = "<:github:506473892689215518> GitHub",
+						value = "[" .. p.data[2].github .. "](https://github.com/" .. p.data[2].github .. ")",
+						inline = true
+					} or nil
+				end
 			end
-		end
-		if hasPermission(permissions.is_art, p.discord) then
-			icon = icon .. "<:p5:468937377981923339> "
-			if p.data[3] and table.count(p.data[3]) > 0 then
-				fields[#fields + 1] = p.data[3].deviantart and {
-					name = "<:deviantart:506475600416866324> DeviantArt",
-					value = "[" .. p.data[3].deviantart .. "](https://www.deviantart.com/" .. p.data[3].deviantart .. ")",
-					inline = true
-				} or nil
+			if hasPermission(permissions.is_art, p.discord) then
+				icon = icon .. "<:p5:468937377981923339> "
+				if p.data[3] and table.count(p.data[3]) > 0 then
+					fields[#fields + 1] = p.data[3].deviantart and {
+						name = "<:deviantart:506475600416866324> DeviantArt",
+						value = "[" .. p.data[3].deviantart .. "](https://www.deviantart.com/" .. p.data[3].deviantart .. ")",
+						inline = true
+					} or nil
+				end
 			end
-		end
-		if hasPermission(permissions.is_trad, p.discord) then
-			icon = icon .. ":earth_americas: "
-			if p.data[4] and table.count(p.data[4]) > 0 then
-				fields[#fields + 1] = p.data[4].trad and {
-					name = ":globe_with_meridians: Modules Translated",
-					value = p.data[4].trad,
-					inline = true
-				} or nil
+			if hasPermission(permissions.is_trad, p.discord) then
+				icon = icon .. ":earth_americas: "
+				if p.data[4] and table.count(p.data[4]) > 0 then
+					fields[#fields + 1] = p.data[4].trad and {
+						name = ":globe_with_meridians: Modules Translated",
+						value = p.data[4].trad,
+						inline = true
+					} or nil
+				end
 			end
-		end
-		if hasPermission(permissions.is_map, p.discord) then
-			icon = icon .. "<:p41:463508055577985024> "
-			if p.data[5] and table.count(p.data[5]) > 0 then
-				fields[#fields + 1] = p.data[5].perms and {
-					name = "<:ground:506477349966053386> HighPerm Maps",
-					value = p.data[5].perms,
-					inline = true
-				} or nil
+			if hasPermission(permissions.is_map, p.discord) then
+				icon = icon .. "<:p41:463508055577985024> "
+				if p.data[5] and table.count(p.data[5]) > 0 then
+					fields[#fields + 1] = p.data[5].perms and {
+						name = "<:ground:506477349966053386> HighPerm Maps",
+						value = p.data[5].perms,
+						inline = true
+					} or nil
+				end
 			end
-		end
-		if hasPermission(permissions.is_evt, p.discord) then
-			icon = icon .. "<:idea:559070151278854155> "
-			if p.data[6] and table.count(p.data[6]) > 0 then
-				fields[#fields + 1] = p.data[6].evt and {
-					name = "<:thug:472922464083640320> Events Created",
-					value = p.data[6].evt,
-					inline = true
-				} or nil
+			if hasPermission(permissions.is_evt, p.discord) then
+				icon = icon .. "<:idea:559070151278854155> "
+				if p.data[6] and table.count(p.data[6]) > 0 then
+					fields[#fields + 1] = p.data[6].evt and {
+						name = "<:thug:472922464083640320> Events Created",
+						value = p.data[6].evt,
+						inline = true
+					} or nil
+				end
 			end
-		end
-		if hasPermission(permissions.is_shades, p.discord) then
-			icon = icon .. "<:illuminati:542115872328646666> "
-			if p.data[7] and table.count(p.data[7]) > 0 then
+			if hasPermission(permissions.is_shades, p.discord) then
+				icon = icon .. "<:illuminati:542115872328646666> "
+				if p.data[7] and table.count(p.data[7]) > 0 then
 
+				end
 			end
-		end
-		if hasPermission(permissions.is_fc, p.discord) then
-			icon = icon .. "<:fun:559069782469771264> "
-			if p.data[8] and table.count(p.data[8]) > 0 then
+			if hasPermission(permissions.is_fc, p.discord) then
+				icon = icon .. "<:fun:559069782469771264> "
+				if p.data[8] and table.count(p.data[8]) > 0 then
 
+				end
 			end
-		end
-		if hasPermission(permissions.is_math, p.discord) then
-			icon = icon .. ":triangular_ruler: "
-			if p.data[9] and table.count(p.data[9]) > 0 then
+			if hasPermission(permissions.is_math, p.discord) then
+				icon = icon .. ":triangular_ruler: "
+				if p.data[9] and table.count(p.data[9]) > 0 then
 
+				end
 			end
-		end
-		if hasPermission(permissions.is_fash, p.discord) then
-			icon = icon .. "<:dance:468937918115741718> "
-			if p.data[10] and table.count(p.data[10]) > 0 then
+			if hasPermission(permissions.is_fash, p.discord) then
+				icon = icon .. "<:dance:468937918115741718> "
+				if p.data[10] and table.count(p.data[10]) > 0 then
 
+				end
 			end
-		end
-		if hasPermission(permissions.is_writer, p.discord) then
-			icon = icon .. ":pencil: "
-			if p.data[11] and table.count(p.data[11]) > 0 then
-				fields[#fields + 1] = p.data[11].wattpad and {
-					name = "<:wattpad:517697014541058049> Wattpad",
-					value = "[" .. p.data[11].wattpad .. "](https://www.wattpad.com/user/" .. p.data[11].wattpad .. ")",
-					inline = true
-				} or nil
+			if hasPermission(permissions.is_writer, p.discord) then
+				icon = icon .. ":pencil: "
+				if p.data[11] and table.count(p.data[11]) > 0 then
+					fields[#fields + 1] = p.data[11].wattpad and {
+						name = "<:wattpad:517697014541058049> Wattpad",
+						value = "[" .. p.data[11].wattpad .. "](https://www.wattpad.com/user/" .. p.data[11].wattpad .. ")",
+						inline = true
+					} or nil
+				end
 			end
 		end
 
@@ -2872,7 +3040,7 @@ commands["profile"] = {
 
 		toDelete[message.id] = message:reply({
 			embed = {
-				color = role.color,
+				color = (role.color > 0 and role.color or color.sys),
 
 				thumbnail = { url = p.discord.avatarURL },
 
@@ -3470,127 +3638,6 @@ commands["xml"] = {
 	end,
 }
 	-- Not public
-commands["edit"] = {
-	auth = permissions.has_power,
-	description = "Edits the data of your profile.",
-	f = function(message, parameters)
-		local syntax = "Use `!edit field value` or `!edit field` to remove the value.\nThe available fields are:\n" .. concat(profileStruct, '', function(index, value)
-			if not value.index then
-				return "**" .. index .. "** - " .. value.description .. "\n"
-			else
-				if message.member:hasRole(roles[roleFlags[value.index]]) then
-					return "**" .. index .. "** - " .. value.description .. "\n"
-				end
-				return ''
-			end
-		end)
-
-		if parameters and #parameters > 0 then
-			local field, value = string.match(parameters, "^(%S+)[\n ]+(.+)$")
-
-			if field and profileStruct[field] then
-				if profileStruct[field].index and not message.member:hasRole(roles[roleFlags[profileStruct[field].index]]) then
-					return sendError(message, "EDIT", "Field authorization denied.", "You can not update this field because you do not have the role `" .. string.upper(roleFlags[profileStruct[field].index]) .. "`.")
-				end
-
-				local isNumber = profileStruct[field].type == "number"
-				if isNumber then
-					value = tonumber(value)
-					if not value then
-						return sendError(message, "EDIT", "The value must be a number.")
-					end
-					value = math.floor(value)
-				end
-
-				if profileStruct[field].min and (isNumber and value or #value) < profileStruct[field].min then
-					return sendError(message, "EDIT", "Invalid value.", "The value or value length must be greater than or equal to **" .. profileStruct[field].min .. "**.")
-				end
-				if profileStruct[field].max and (isNumber and value or #value) > profileStruct[field].max then
-					return sendError(message, "EDIT", "Invalid value.", "The value or value length must be less than or equal to **" .. profileStruct[field].max .. "**.")
-				end
-
-				if profileStruct[field].format then
-					local ok = true
-					if type(profileStruct[field].format) == "table" then
-						for k, v in next, profileStruct[field].format do
-							if not string.format(value, v) then
-								ok = false
-								break
-							end
-						end
-					else
-						ok = not not string.format(value, profileStruct[field].format)
-					end
-
-					if not ok then
-						return sendError(message, "EDIT", "Invalid value.", "The format of this field requires another value format.")
-					end
-				end
-
-				if profileStruct[field].valid then
-					local success, fix = profileStruct[field].valid(value)
-					if not success then
-						return sendError(message, "EDIT", "Invalid value.", "This value is invalid or does not exist.")
-					elseif fix then
-						value = fix
-					end
-				end
-
-				if not staffMembers[message.author.id] then
-					staffMembers[message.author.id] = { }
-				end
-				local old_value
-				if profileStruct[field].index then
-					if not staffMembers[message.author.id][profileStruct[field].index] then
-						staffMembers[message.author.id][profileStruct[field].index] = { }
-					end
-					old_value = staffMembers[message.author.id][profileStruct[field].index][field]
-					staffMembers[message.author.id][profileStruct[field].index][field] = value
-				else
-					old_value = staffMembers[message.author.id][field]
-					staffMembers[message.author.id][field] = value
-				end
-
-				message.author:send({
-					embed = {
-						color = color.interaction,
-						title = "Profile Data Updated!",
-						description = "You updated the field `" .. field .. "` with the value `" .. value .. "`" .. (old_value and ("\nIts value was, previously, `" .. old_value .. "`") or "")
-					}
-				})
-				message:delete()
-			else
-				if profileStruct[parameters] then
-					local old_value
-					if profileStruct[parameters].index then
-						old_value = staffMembers[message.author.id][profileStruct[parameters].index]
-						if old_value then
-							old_value = old_value[parameters]
-						end
-
-						staffMembers[message.author.id][profileStruct[parameters].index][parameters] = nil
-					else
-						old_value = staffMembers[message.author.id][parameters]
-						staffMembers[message.author.id][parameters] = nil
-					end
-
-					message.author:send({
-						embed = {
-							color = color.interaction,
-							title = "Profile Data Updated!",
-							description = "You removed the field `" .. parameters .. "`" .. (old_value and (" that had the value `" .. old_value .. "`") or "")
-						}
-					})
-					message:delete()
-				else
-					sendError(message, "EDIT", "Invalid field.", syntax)
-				end
-			end
-		else
-			sendError(message, "EDIT", "Invalid or missing parameters.", syntax)
-		end
-	end
-}
 commands["pin"] = {
 	auth = permissions.has_power,
 	description = "Pins or Unpins a message in an #prj channel.",
@@ -3799,7 +3846,7 @@ commands["cmd"] = {
 
 						modules[category].commands[command] = cmd
 
-						save("b_modules", modules)
+						save("b_modules", modules, false, true)
 
 						message:reply({
 							embed = {
@@ -4320,7 +4367,7 @@ commands["delcmd"] = {
 				if modules[category].commands[command] then
 					modules[category].commands[command] = nil
 
-					save("b_modules", modules)
+					save("b_modules", modules, false, true)
 
 					message:reply({
 						embed = {
@@ -4351,7 +4398,7 @@ commands["prefix"] = {
 		if parameters and #parameters > 0 and #parameters < 3 then 
 			modules[category].prefix = (parameters):gsub("[%(%)%.%%%+%-%*%?%[%]%^%$]", "%%%0")
 
-			save("b_modules", modules)
+			save("b_modules", modules, false, true)
 
 			message:reply({
 				embed = {
@@ -4408,7 +4455,7 @@ commands["public"] = {
 
 				modules[category].hasPublicChannel = true
 
-				save("b_modules", modules)
+				save("b_modules", modules, false, true)
 
 				message:reply({
 					embed = {
@@ -4541,7 +4588,7 @@ commands["delgcmd"] = {
 				if globalCommands[command] and (globalCommands[command].author == message.author.id or authIds[message.author.id]) then
 					globalCommands[command] = nil
 
-					save("b_gcommands", globalCommands)
+					saveGlobalCommands()
 
 					message:reply({
 						embed = {
@@ -4658,7 +4705,7 @@ commands["gcmd"] = {
 
 								globalCommands[command] = cmd
 
-								save("b_gcommands", globalCommands)
+								saveGlobalCommands()
 
 								message:reply({
 									embed = {
@@ -4769,7 +4816,7 @@ commands["module"] = {
 
 						modules[module] = { commands = { } }
 
-						save("b_modules", modules)
+						save("b_modules", modules, false, true)
 
 						message:reply({
 							embed = {
@@ -4974,8 +5021,10 @@ commands["del"] = {
 commands["exit"] = {
 	description = "Ends the bot process.",
 	f = function(message)
-		save("b_modules", modules)
-		save("b_gcommands", globalCommands)
+		save("b_modules", modules, false, true)
+
+		saveGlobalCommands()
+
 		save("b_activechannels", activeChannels)
 		save("b_activemembers", activeMembers)
 		save("b_cmddata", cmdData)
@@ -5061,8 +5110,8 @@ commands["refresh"] = {
 		if table.count(activeMembers) > 0 then
 			save("b_activemembers", activeMembers)
 		end
-		if table.count(staffMembers) > 0 then
-			save("b_memberprofiles", staffMembers)
+		if table.count(memberProfiles) > 0 then
+			save("b_memberprofiles", memberProfiles)
 		end
 		if table.count(cmdData) > 0 then
 			save("b_cmddata", cmdData)
@@ -5130,7 +5179,7 @@ commands["remmodule"] = {
 					end
 
 					modules[parameters] = nil
-					save("b_modules", modules)
+					save("b_modules", modules, false, true)
 
 					message:reply({
 						embed = {
@@ -5222,7 +5271,7 @@ commands["set"] = {
 }
 
 --[[ Channel Behaviors ]]--
-channelCommandBehaviors["bridge"] = {
+channelBehavior["bridge"] = {
 	output = true,
 	f = function(message)
 		if not message.content or message.content == "" then return end
@@ -5242,7 +5291,7 @@ channelCommandBehaviors["bridge"] = {
 		return message:delete()
 	end
 }
-channelCommandBehaviors["map"] = {
+channelBehavior["map"] = {
 	f = function(message)
 		if not message.content or message.content == "" then return end
 
@@ -5302,7 +5351,7 @@ channelCommandBehaviors["map"] = {
 		end
 	end
 }
-channelCommandBehaviors["image"] = {
+channelBehavior["image"] = {
 	f = function(message)
 		local iniSettings, _, __, settings = string.find(message.content, "`(`?`?)\n*(.-)%1`$")
 
@@ -5387,19 +5436,28 @@ channelCommandBehaviors["image"] = {
 		end
 	end
 }
-channelCommandBehaviors["role-color"] = {
+channelBehavior["role-color"] = {
 	f = function(message)
 		message:addReaction(reactions.p5)
 	end
 }
-channelCommandBehaviors["priv-channels"] = {
+channelBehavior["priv-channels"] = {
 	f = function(message)
 		message:addReaction(reactions.arrowUp)
 	end
 }
+channelBehavior["suggestions"] = {
+	botmsg = true,
+	f = function(message)
+		if string.sub(message.content, 1, 22) == "<#" .. channels["suggestions"] .. "> " then
+			message:addReaction(reactions.thumbsup)
+			message:addReaction(reactions.thumbsdown)
+		end
+	end
+}
 
 --[[ Channel Reaction Behaviors ]]--
-channelReactionBehaviors["modules"] = {
+channelReactionBehavior["modules"] = {
 	f_Add = function(message, channel, hash, userId)
 		local module = message and message.embed.title
 
@@ -5439,7 +5497,7 @@ channelReactionBehaviors["modules"] = {
 		end
 	end
 }
-channelReactionBehaviors["commu"] = {
+channelReactionBehavior["commu"] = {
 	f_Add = function(message, channel, hash, userId)
 		for flag, flagHash in next, countryFlags do
 			if not countryFlags_Aliases[flag] and flagHash == hash then
@@ -5472,7 +5530,7 @@ channelReactionBehaviors["commu"] = {
 		end
 	end
 }
-channelReactionBehaviors["map"] = {
+channelReactionBehavior["map"] = {
 	f_Add = function(message, channel, hash, userId)
 		local member = channel.guild:getMember(userId)
 
@@ -5518,7 +5576,7 @@ channelReactionBehaviors["map"] = {
 		end
 	end
 }
-channelReactionBehaviors["image"] = {
+channelReactionBehavior["image"] = {
 	f_Add = function(message, channel, hash, userId)
 		local member = channel.guild:getMember(userId)
 
@@ -5625,7 +5683,7 @@ channelReactionBehaviors["image"] = {
 		end
 	end
 }
-channelReactionBehaviors["report"] = {
+channelReactionBehavior["report"] = {
 	f_Add = function(message, channel, hash)
 		if hash == reactions.x then
 			message:delete()
@@ -5682,7 +5740,7 @@ channelReactionBehaviors["report"] = {
 		end
 	end
 }
-channelReactionBehaviors["role-color"] = {
+channelReactionBehavior["role-color"] = {
 	f_Add = function(message, _, _, userId)
 		local id = string.match(message.content, "<@&(%d+)>")
 		local member = message.guild:getMember(userId)
@@ -5708,7 +5766,7 @@ channelReactionBehaviors["role-color"] = {
 		end
 	end
 }
-channelReactionBehaviors["priv-channels"] = {
+channelReactionBehavior["priv-channels"] = {
 	f_Add = function(message, _, _, userId)
 		local member = message.guild:getMember(userId)
 
@@ -5728,23 +5786,34 @@ channelReactionBehaviors["priv-channels"] = {
 		end
 	end
 }
+channelReactionBehavior["suggestions"] = {
+	f_Add = function(message, _, hash, userId)
+		if authIds[userId] and hash ~= reactions.thumbsup and hash ~= reactions.thumbsdown then
+			for r in message.reactions:iter() do
+				if r.emojiName == reactions.thumbsup or r.emojiName == reactions.thumbsdown then
+					r:delete()
+				end
+			end
+		end
+	end
+}
 
 --[[ Events ]]--
 client:on("ready", function()
-	modules = getDatabase("b_modules")
-	globalCommands = getDatabase("b_gcommands")
+	modules = getDatabase("b_modules", false, true)
+	globalCommands = json.decode(base64.decode(getDatabase("b_gcommands", true) .. getDatabase("b_gcommands_2", true)))
 	activeChannels = getDatabase("b_activechannels")
 	activeMembers = getDatabase("b_activemembers")
-	staffMembers = getDatabase("b_memberprofiles")
+	memberProfiles = getDatabase("b_memberprofiles")
 	cmdData = getDatabase("b_cmddata")
 	serverActivity = getDatabase("b_serveractivity")
 	-- Normalize string indexes ^
-	for k, v in next, table.copy(staffMembers) do
+	for k, v in next, table.copy(memberProfiles) do
 		for i, j in next, v do
 			local m = tonumber(i)
 			if m then
-				staffMembers[k][m] = j
-				staffMembers[k][i] = j
+				memberProfiles[k][m] = j
+				memberProfiles[k][i] = j
 			end
 		end
 	end
@@ -5777,8 +5846,8 @@ client:on("ready", function()
 			botIds = botIds,
 			boundaries = boundaries,
 
-			channelCommandBehaviors = channelCommandBehaviors,
-			channelReactionBehaviors = channelReactionBehaviors,
+			channelBehavior = channelBehavior,
+			channelReactionBehavior = channelReactionBehavior,
 			client = client,
 			cmdData = cmdData,
 			commands = commands,
@@ -5797,6 +5866,8 @@ client:on("ready", function()
 
 			log = log,
 
+			memberProfiles = memberProfiles,
+
 			--[[Doc
 				~
 				"Prints a string in the console."
@@ -5807,6 +5878,7 @@ client:on("ready", function()
 			end,
 
 			save = save,
+			saveGlobalCommands = saveGlobalCommands,
 			sendError = sendError,
 			serverActivity = serverActivity,
 			setPermissions = setPermissions,
@@ -5897,16 +5969,16 @@ local globalCommandCall = function(cmd, message, parameters)
 	if cmd.title or cmd.desc or cmd.url then
 		msg = message:reply({
 			embed = {
-				title = (cmd.title and base64.decode(cmd.title) or nil),
-				description = (cmd.desc and base64.decode(cmd.desc) or nil),
-				image = (cmd.url and { url = base64.decode(cmd.url) } or nil)
+				title = (cmd.title or nil),
+				description = (cmd.desc or nil),
+				image = (cmd.url and { url = cmd.url } or nil)
 			}
 		})
 	end
 
 	local msgs
 	if cmd.script then
-		msgs = commands["lua"].f(message, "`" .. base64.decode(cmd.script) .. "`", nil, debugAction.cmd, { parameters = parameters })
+		msgs = commands["lua"].f(message, "`" .. cmd.script .. "`", nil, debugAction.cmd, { parameters = parameters })
 	end
 
 	if msgs then
@@ -5921,9 +5993,9 @@ end
 messageCreate = function(message, skipChannelActivity)
 	-- Ignore its own messages
 	if message.author.id == client.user.id then return end
-
+	
 	-- Channel behavior system (Output)
-	for k, v in next, channelCommandBehaviors do
+	for k, v in next, channelBehavior do
 		if v.output and channels[k] and message.channel.id == channels[k] then
 			throwError(message, { "Command Behavior [" .. k .. "]" }, v.f, message)
 			return
@@ -5937,7 +6009,7 @@ messageCreate = function(message, skipChannelActivity)
 	if message.channel.type == 1 then return end
 
 	-- Channel behavior system (Input)
-	for k, v in next, channelCommandBehaviors do
+	for k, v in next, channelBehavior do
 		if not v.output and channels[k] and message.channel.id == channels[k] then
 			throwError(message, { "Command Behavior [" .. k .. "]" }, v.f, message)
 			return
@@ -6078,7 +6150,7 @@ messageDelete = function(message, skipChannelActivity)
 			end
 			if message.author.bot then return end
 			local _, k = table.find(channels, tostring(message.channel.id))
-			if channelReactionBehaviors[tostring(k)] then return end
+			if channelReactionBehavior[tostring(k)] then return end
 
 			client:getChannel(channels["chat-log"]):send({
 				content = "Deleted by " .. ((client.owner.id == message.author.id) and message.author.name or ("<@" .. message.author.id .. ">")) .. "",
@@ -6131,8 +6203,8 @@ local memberLeave = function(member)
 	if activeMembers[member.id] then
 		activeMembers[member.id] = nil
 	end
-	if staffMembers[member.id] then
-		staffMembers[member.id] = nil
+	if memberProfiles[member.id] then
+		memberProfiles[member.id] = nil
 	end
 end
 client:on("memberJoin", function(member)
@@ -6146,7 +6218,7 @@ local reactionAdd = function(cached, channel, messageId, hash, userId)
 	if userId == client.user.id then return end
 
 	local message = channel:getMessage(messageId)
-	for k, v in next, channelReactionBehaviors do
+	for k, v in next, channelReactionBehavior do
 		if v.f_Add and channels[k] and channels[k] == channel.id then
 			return throwError(message, { "ReactionAdd Behavior [" .. k .. "]" }, v.f_Add, message, channel, hash, userId)
 		end
@@ -6281,7 +6353,7 @@ local reactionRemove = function(cached, channel, messageId, hash, userId)
 	if userId == client.user.id then return end
 
 	local message = channel:getMessage(messageId)
-	for k, v in next, channelReactionBehaviors do
+	for k, v in next, channelReactionBehavior do
 		if v.f_Rem and channels[k] and channels[k] == channel.id then
 			return throwError(message, { "ReactionRem Behavior [" .. k .. "]" }, v.f_Rem, channel, message, hash, userId)
 		end
@@ -6325,7 +6397,7 @@ local clockMin = function()
 	if minutes % 5 == 0 then
 		save("b_activechannels", activeChannels)
 		save("b_activemembers", activeMembers)
-		save("b_memberprofiles", staffMembers)
+		save("b_memberprofiles", memberProfiles)
 		save("b_cmddata", cmdData)
 		save("b_serveractivity", serverActivity)
 	end
