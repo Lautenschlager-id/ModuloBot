@@ -981,8 +981,7 @@ local moduleRestrictions = { "debug", "dofile", "io", "load", "loadfile", "loads
 	1. **__add(tbl, new)** ~> Adds two tables."
 	!table
 ]]
-local meta
-meta = {
+local meta = {
 	__add = function(this, new)
 		if type(new) ~= "table" then return this end
 		--[[
@@ -4274,6 +4273,20 @@ commands["lua"] = {
 
 				local msg = client:getChannel(channelId):getMessage(messageId)
 				return msg and getMessage(msg) or nil
+			end
+
+			ENV.getmetatable = function(x)
+				if type(x) == "string" then
+					return "gtfo"
+				end
+				return getmetatable(x)
+			end
+
+			ENV.setmetatable = function(x)
+				if x == string or x == math or x == table or type(x) == "string" or x == ENV or x == _G then
+					return "gtfo"
+				end
+				return setmetatable(x)
 			end
 
 			local func, syntaxErr = load(parameters, '', 't', ENV)
