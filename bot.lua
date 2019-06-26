@@ -1270,7 +1270,7 @@ local buildMessage = function(msg, message)
 	local memberName
 	if message then
 		memberName = message.guild:getMember(msg.author.id)
-		memberName = memberName and memberName.name or msg.author.fullname
+		memberName = memberName and memberName.name or msg.author.tag
 	end
 
 	local embed = {
@@ -1656,19 +1656,25 @@ local addServerActivity = function(x, sub)
 	local today = os.date("%d/%m/%Y")
 	if not serverActivity[today] then
 		serverActivity[today] = {
-			members = { },
-			counter = { 0, 0 },
-			commands = { 0, 0 }
+			l = { }, -- Member logs
+			c = { 0, 0 }, -- Counter
+			b = { 0, 0 }, -- Commands
+			m = 0 -- Members flow
 		}
 	end
 
-	if type(x) == "boolean" then -- Command [true = bot, false = global]
+	sub = (sub and -1 or 1)
+
+	local tx = type(x)
+	if tx == "boolean" then -- Command [true = bot, false = global]
 		local id = (x and 1 or 2)
-		serverActivity[today].commands[id] = serverActivity[today].commands[id] + (sub and -1 or 1)
-	elseif x then
-		serverActivity[today].members[x.id] = true -- Thinking
+		serverActivity[today].b[id] = serverActivity[today].b[id] + sub
+	elseif tx == "number" then -- New/Leave Members
+		serverActivity[today].m = serverActivity[today].m + sub
+	elseif x then -- Tbl
+		serverActivity[today].l[x.id] = true -- Thinking
 		local id = (hasPermission(permissions.has_power, x) and 2 or 1)
-		serverActivity[today].counter[id] = serverActivity[today].counter[id] + (sub and -1 or 1)
+		serverActivity[today].c[id] = serverActivity[today].c[id] + sub
 	end
 end
 
@@ -2347,7 +2353,7 @@ commands["avatar"] = {
 			toDelete[message.id] = message:reply({
 				embed = {
 					color = color.sys,
-					description = "**" .. parameters.fullname .. "'s avatar: [here](" .. url .. ")**",
+					description = "**" .. parameters.tag .. "'s avatar: [here](" .. url .. ")**",
 					image = { url = url }
 				}
 			})
@@ -2805,7 +2811,7 @@ commands["list"] = {
 				end
 			end
 
-			local members = { }
+			local toSort, counter = { }, 0
 			for member in message.guild.members:findAll(function(member)
 				for i = 1, #roles do
 					if not member:hasRole(roles[i]) then
@@ -2821,7 +2827,14 @@ commands["list"] = {
 
 				return true
 			end) do
-				members[#members + 1] = "<:" .. (reactions[member.status] or ':') .. "> <@" .. member.id .. "> " .. member.name
+				counter = counter + 1
+				toSort[counter] = member
+			end
+			table.sort(toSort, function(m1, m2) return m1.name < m2.name end)
+
+			local members = { }
+			for m = 1, counter do
+				members[m] = "<:" .. (reactions[toSort[m].status] or ':') .. "> <@" .. toSort[m].id .. "> " .. toSort[m].name
 			end
 
 			local lines, msgs = splitByLine(table.concat(members, "\n")), { }
@@ -2837,6 +2850,53 @@ commands["list"] = {
 			toDelete[message.id] = msgs
 		else
 			sendError(message, "LIST", "Invalid or missing parameters.", syntax)
+		end
+	end
+}
+commands["mobile"] = {
+	auth = permissions.public,
+	description = "Sends a private message with the embed in a text format.",
+	f = function(message, parameters)
+		parameters = parameters and string.match(parameters, "%d+")
+
+		if parameters then
+			local msg = message.channel:getMessage(parameters)
+
+			if msg then
+				if msg.embed then
+					local content = { }
+
+					if msg.content and #msg.content > 3 then
+						content[#content + 1] = "`" .. msg.content .. "`"
+					end
+
+					if msg.embed.title then
+						content[#content + 1] = "**" .. msg.embed.title .. "**"
+					end
+					if msg.embed.description then
+						content[#content + 1] = msg.embed.description
+					end
+
+					local footerText = msg.embed.footer and msg.embed.footer.text
+					if footerText then
+						content[#content + 1] = "`" .. footerText .. "`"
+					end
+
+					local len = #content
+					content[len + (footerText and 0 or 1)] = (footerText and (content[len] .. " | ") or "") .. "`" .. os.date("%c", os.time(discordia.Date().fromISO(msg.timestamp):toTableUTC())) .. "`"
+
+					local img = (msg.attachment and msg.attachment.url) or (msg.embed and msg.embed.image and msg.embed.image.url)
+					message.author:send({
+						content = string.sub(table.concat(content, "\n"), 1, 2000),
+						embed = {
+							image = (img and { url = img } or nil)
+						}
+					})
+				else
+					message.author:send(msg.content)
+				end
+				message:delete()
+			end
 		end
 	end
 }
@@ -3013,6 +3073,9 @@ commands["profile"] = {
 		if p.discord.bot then
 			icon = icon .. ":robot: "
 		end
+		if hasPermission(permissions.is_mod, p.discord) then
+			icon = icon .. permIcons.is_mod
+		end
 		if hasPermission(permissions.has_power, p.discord) then	
 			if hasPermission(permissions.is_module, p.discord) then
 				icon = icon .. permIcons.is_module
@@ -3175,7 +3238,7 @@ commands["profile"] = {
 commands["quote"] = {
 	auth = permissions.public,
 	description = "Quotes an old message.",
-	f = function(message, parameters, _, toReturn)
+	f = function(message, parameters)
 		if parameters and #parameters > 0 then
 			local quotedChannel, quotedMessage = string.match(parameters, "<?#?(%d+)>? *%-(%d+)")
 			quotedMessage = quotedMessage or string.match(parameters, "%d+")
@@ -3187,14 +3250,7 @@ commands["quote"] = {
 
 					if msg then
 						message:delete()
-
-						local embed = buildMessage(msg, message)
-
-						if toReturn then
-							return embed
-						else
-							message:reply({ content = "_Quote from **" .. (message.member or message.author).name .. "**_", embed = embed })
-						end
+						message:reply({ content = "_Quote from **" .. (message.member or message.author).name .. "**_", embed = buildMessage(msg, message) })
 					end
 				end
 			end
@@ -3502,7 +3558,7 @@ commands["tfmprofile"] = {
 						color = color.atelier801,
 						title = "<:tfm_cheese:458404666926039053> Transformice Profile - " .. parameters .. (body.gender == "2" and " <:male:456193580155928588>" or body.gende == "1" and " <:female:456193579308679169>" or ""),
 						description = --[[(body.registration_date == "" and "" or (":calendar: " .. body.registration_date .. "\n\n")) .. ]]"**Level " .. level .. "** " .. getRate(math.percent(remain, (remain + need)), 100, 5) .. "\n" .. (tribe and ("\n<:tribe:458407729736974357> **Tribe :** " .. tribe) or "") .. --[["\n```\n" .. body.title_id .. "```"]]"\n<:shaman:512015935989612544> " .. body.saved_mice .. " / " .. body.saved_mice_hard .. " / " .. body.saved_mice_divine .. "\n<:tfm_cheese:458404666926039053> **Shaman cheese :** " .. body.shaman_cheese .. "\n\n<:racing:512016668038266890> **Firsts :** " .. body.first .. " " .. getRate(math.percent(body.first, body.round_played, 100), 100, 5) .. "\n<:tfm_cheese:458404666926039053> **Cheeses: ** " .. body.cheese_gathered .. " " .. getRate(math.percent(body.cheese_gathered, body.round_played, 100), 100, 5) .. "\n\n<:bootcamp:512017071031451654> **Bootcamps :** " .. body.bootcamp .. (soulmate and("\n\n:revolving_hearts: **" .. normalizeDiscriminator(soulmate) .. (body.marriage_date and ("** since **" .. body.marriage_date .. "**") or "**")) or ""),
-						thumbnail = { url = "http://avatars.atelier801.com/" .. (data.id % 10000) .. "/" .. data.id .. ".jpg" }
+						thumbnail = { url = "http://avatars.atelier801.com/" .. (body.id % 10000) .. "/" .. body.id .. ".jpg" }
 					}
 				})
 			else 
@@ -4139,7 +4195,7 @@ commands["lua"] = {
 				"The name and discriminator of the user that ran **!lua**."
 				!string
 			]]
-			ENV.discord.authorName = message.author.fullname
+			ENV.discord.authorName = message.author.tag
 			--[[Doc
 				"The id of the script message from **!lua**."
 				!string|int
@@ -4164,7 +4220,8 @@ commands["lua"] = {
 						discriminator = message.author.discriminator,
 						mentionString = message.author.mentionString,
 						name = message.author.name,
-						fullname = message.author.fullname,
+						tag = message.author.tag,
+						fullname = message.author.tag,
 						username = message.author.username
 					},
 					cleanContent = message.cleanContent,
@@ -4198,7 +4255,7 @@ commands["lua"] = {
 					return {
 						content = lastMessage.content,
 						authorId = lastMessage.author.id,
-						authorName = lastMessage.author.fullname
+						authorName = lastMessage.author.tag
 					}
 				end
 				return { }
@@ -4334,7 +4391,8 @@ commands["lua"] = {
 			end
 
 			ENV.printt = function(s)
-				return ENV.print(table.tostring(s))
+				s = table.tostring(s)
+				return ENV.print((#s < 1900 and ("```Lua\n" .. s .. "```") or s))
 			end
 
 			if hasAuth then
@@ -4462,7 +4520,7 @@ commands["lua"] = {
 				memberName = tostring(memberName)
 
 				local member = message.guild.members:find(function(m)
-					return m.fullname == memberName or m.nickname == memberName or m.name == memberName
+					return m.tag == memberName or m.nickname == memberName or m.name == memberName
 				end)
 
 				return member and member.id
@@ -4499,11 +4557,11 @@ commands["lua"] = {
 				return getmetatable(x)
 			end
 
-			ENV.setmetatable = function(x)
+			ENV.setmetatable = function(x, m)
 				if x == string or x == math or x == table or type(x) == "string" or x == ENV or x == _G then
 					return "gtfo"
 				end
-				return setmetatable(x)
+				return setmetatable(x, m)
 			end
 
 			local func, syntaxErr = load(parameters, '', 't', ENV)
@@ -4792,7 +4850,7 @@ commands["staff"] = {
 
 					message:delete()
 				else
-					sendError(message, "STAFF", "Role not found for this category", "Private message **" .. client.owner.fullname .. "**")
+					sendError(message, "STAFF", "Role not found for this category", "Private message **" .. client.owner.tag .. "**")
 				end
 			else
 				sendError(message, "STAFF", "Invalid syntax, user or member.", syntax)
@@ -4852,11 +4910,6 @@ commands["emoji"] = {
 
 				if body then
 					image = "data:image/png;base64," .. binBase64.encode(body)
-
-					local file = io.open("test.txt", "w")
-					file:write(image)
-					file:flush()
-					file:close()
 
 					local emoji = message.guild:createEmoji(parameters, image)
 					if emoji then
@@ -4937,7 +4990,7 @@ commands["gcmd"] = {
 		local category = message.channel.category and string.lower(message.channel.category.name) or nil
 
 		if category and string.sub(category, 1, 1) == "#" then
-			return sendError(message, "GCMD", "This command cannot be used in for #modules. Use the command `!cmd` instead.")
+			return sendError(message, "GCMD", "This command cannot be used for #modules. Use the command `!cmd` instead.")
 		end
 
 		local syntax = "Use `!gcmd 0|1|2 0|1|2 command_name [ script ``` script ``` ] [ value[[command_content]] ] [ title[[command_title]] ] [ description[[command_description]] ]`.\n\n[Click here to open the command generator](https://lautenschlager-id.github.io/gcmd-generator.github.io/)"
@@ -5154,6 +5207,64 @@ commands["mute"] = {
 			end
 		else
 			sendError(message, "MUTE", "Invalid or missing parameters.", syntax)
+		end
+	end
+}
+commands["set"] = {
+	auth = permissions.is_mod,
+	description = "Gives a role to a member.",
+	f = function(message, parameters)
+		local syntax = "Use `!set @member_name/member_id role_name/role_flag`."
+
+		if parameters and #parameters > 0 then
+			local member, role = string.match(parameters, "<@!?(%d+)>[\n ]+(.+)")
+
+			if not member then
+				member, role = string.match(parameters, "(%d+)[\n ]+(.+)")
+			end
+
+			if member and role then
+				if message.member.id == member and not authIds[member] then
+					return sendError(message, "SET", "You can not assign yourself a role.")
+				end
+				member = message.guild:getMember(member)
+				if member then
+					local numR = tonumber(role)
+					local role_id = roles[numR and roleFlags[numR] or string.lower(role)]
+					if role_id then
+						if not member:hasRole(role_id) then
+							member:addRole(role_id)
+
+							role = message.guild:getRole(role_id)
+
+							local msg = {
+								embed = {
+									color = role.color,
+									title = "Promotion!",
+									thumbnail = { url = member.user.avatarURL },
+									description = "**" .. member.name .. "** is now a(n) `" .. string.upper(role.name) .. "`.",
+									footer = { text = "Set by " .. message.member.name }
+								}
+							}
+							message:reply(msg)
+							client:getChannel(channels["mod-logs"]):send(msg)
+							message:delete()
+						else
+							sendError(message, "SET", "Member already have the role.")
+						end
+					else
+						sendError(message, "SET", "Invalid role.", "The available roles are:" .. concat(roleFlags, '', function(id, name)
+							return tonumber(id) and "\n\t• [" .. id .. "] " .. name or ''
+						end))
+					end
+				else
+					sendError(message, "SET", "Member doesn't exist.")
+				end
+			else
+				sendError(message, "SET", "Invalid syntax.", syntax)
+			end
+		else
+			sendError(message, "SET", "Invalid or missing parameters.", syntax)
 		end
 	end
 }
@@ -5501,58 +5612,6 @@ commands["resetactivity"] = {
 		save("b_activemembers", activeMembers)
 
 		message:delete()
-	end
-}
-commands["set"] = {
-	description = "Gives a role to a member.",
-	f = function(message, parameters)
-		local syntax = "Use `!set @member_name/member_id role_name/role_flag`."
-
-		if parameters and #parameters > 0 then
-			local member, role = string.match(parameters, "<@!?(%d+)>[\n ]+(.+)")
-
-			if not member then
-				member, role = string.match(parameters, "(%d+)[\n ]+(.+)")
-			end
-
-			if member and role then
-				member = message.guild:getMember(member)
-				if member then
-					local numR = tonumber(role)
-					local role_id = roles[numR and roleFlags[numR] or string.lower(role)]
-					if role_id then
-						if not member:hasRole(role_id) then
-							member:addRole(role_id)
-
-							role = message.guild:getRole(role_id)
-
-							message:reply({
-								embed = {
-									color = role.color,
-									title = "Promotion!",
-									thumbnail = { url = member.user.avatarURL },
-									description = "**" .. member.name .. "** is now a(n) `" .. string.upper(role.name) .. "`.",
-									footer = { text = "Set by " .. message.member.name }
-								}
-							})
-							message:delete()
-						else
-							sendError(message, "SET", "Member already have the role.")
-						end
-					else
-						sendError(message, "SET", "Invalid role.", "The available roles are:" .. concat(roleFlags, '', function(id, name)
-							return tonumber(id) and "\n\t• [" .. id .. "] " .. name or ''
-						end))
-					end
-				else
-					sendError(message, "SET", "Member doesn't exist.")
-				end
-			else
-				sendError(message, "SET", "Invalid syntax.", syntax)
-			end
-		else
-			sendError(message, "SET", "Invalid or missing parameters.", syntax)
-		end
 	end
 }
 
@@ -6111,9 +6170,9 @@ do
 		memberKick = ":boot: ",
 		memberBanAdd = ":skull: ",
 		memberBanRemove = ":rainbow: ",
-		webhookCreate = ":robot ",
-		webhookUpdate = ":robot ",
-		webhookDelete = ":robot ",
+		webhookCreate = ":robot: ",
+		webhookUpdate = ":robot: ",
+		webhookDelete = ":robot: ",
 		emojiCreate = ":star: ",
 		emojiUpdate = ":star: ",
 		emojiDelete = ":star: ",
@@ -6140,7 +6199,7 @@ do
 		local object
 		if log.targetId then
 			object = log:getTarget()
-			if object.id == client.user.id then return end
+			if not object or object.id == client.user.id then return end
 		end
 
 		local fields = { }
@@ -6165,7 +6224,7 @@ do
 		if object then
 			fields[#fields + 1] = {
 				name = "Target",
-				value = tostring(object) .. " | " .. tostring(object.fullname or object.name)
+				value = tostring(object) .. " | " .. tostring(object.tag or object.name)
 			}
 		end
 
@@ -6200,7 +6259,7 @@ do
 		local title, fields, extra = getLogResponse(log, msg)
 		if title then
 			local channel = client:getChannel(channels["mod-logs"])
-			channel:send({
+			if channel:send({
 				embed = {
 					color = color.moderation,
 					title = title,
@@ -6208,8 +6267,7 @@ do
 					fields = fields,
 					timestamp = log.timestamp:gsub(" ", '')
 				}
-			})
-			if extra then
+			}) and extra then
 				channel:send({ embed = extra })
 			end
 		end
@@ -6543,6 +6601,8 @@ messageCreate = function(message, skipChannelActivity)
 	end
 end
 messageDelete = function(message, skipChannelActivity)
+	if not message.guild or message.guild.id ~= channels["guild"] then return end
+	
 	if toDelete[message.id] then
 		local msg
 		for id = 1, #toDelete[message.id] do
@@ -6578,7 +6638,7 @@ messageDelete = function(message, skipChannelActivity)
 			if channelReactionBehavior[tostring(k)] then return end
 
 			client:getChannel(channels["chat-log"]):send({
-				content = "Message from " .. (message.member:hasRole(MOD_ROLE.id) and message.author.fullname or ("<@" .. message.author.id .. ">")),
+				content = "Message from " .. (message.member:hasRole(MOD_ROLE.id) and message.author.tag or ("<@" .. message.author.id .. ">")),
 				embed = {
 					color = color.sys,
 					description = message.content,
@@ -6610,7 +6670,7 @@ client:on("messageUpdate", function(message)
 end)
 client:on("messageDelete", function(message)
 	throwError(message, "MessageDelete", messageDelete, message)
-	if message.guild.id ~= channels["guild"] then return end
+	if message.channel.id == channels["mod-logs"] then return end
 	throwError(nil, "MessageDeleteLogs", auditLogs, message)
 end)
 
@@ -6623,6 +6683,7 @@ local memberJoin = function(member)
 		code_test:getPermissionOverwriteFor(member):setPermissions(devPerms.allowedPermissions, devPerms.deniedPermissions)
 		client:getChannel("472958910475665409"):send(":robot:")
 	end
+	addServerActivity(666)
 end
 local memberLeave = function(member)
 	client:getChannel(channels["logs"]):send("<@" .. member.id .. "> [" .. member.name .. "] just left!\nRoles: " .. tostring(concat(member.roles:toArray(), ", ", function(_, role) return "**" .. role.name .. "**" end)))
@@ -6633,6 +6694,7 @@ local memberLeave = function(member)
 	if memberProfiles[member.id] then
 		memberProfiles[member.id] = nil
 	end
+	addServerActivity(666, true)
 end
 client:on("memberJoin", function(member)
 	if member.guild.id ~= channels["guild"] then return end
