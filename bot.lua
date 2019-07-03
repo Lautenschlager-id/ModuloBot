@@ -116,7 +116,9 @@ local channels = {
 	["priv-channels"] = "543094720382107659",
 	["suggestions"] = "582605483836440606",
 	["mod-logs"] = "586271889467506727",
-	["region"] = "585174371774103582"
+	["region"] = "585174371774103582",
+	["code-test"] = "474253217421721600",
+	["polls"] = "595364384566673413"
 }
 
 local botIds = {
@@ -968,6 +970,7 @@ local currentAvatar
 local botAvatars = { }
 
 local MOD_ROLE = "585148219395276801"
+local MYCITY_INVITE_OBJECT
 
 --[[ System ]]--
 --[[Doc
@@ -1507,6 +1510,14 @@ local getRoleOrder = function(member)
 	return roles, #roles
 end
 
+local getMycityInviteObject = function()
+	for invite in client:getGuild(channels["guild"]):getInvites():iter() do
+		if invite.code == "QPyBwUh" then
+			return invite
+		end
+	end
+end
+
 --[[Doc
 	"Verifies if an user has permission over a specific permission flag."
 	@permission int
@@ -1659,7 +1670,7 @@ local addServerActivity = function(x, sub)
 			l = { }, -- Member logs
 			c = { 0, 0 }, -- Counter
 			b = { 0, 0 }, -- Commands
-			m = 0 -- Members flow
+			m = { 0, 0 } -- Members flow (Joined, left)
 		}
 	end
 
@@ -1670,7 +1681,7 @@ local addServerActivity = function(x, sub)
 		local id = (x and 1 or 2)
 		serverActivity[today].b[id] = serverActivity[today].b[id] + sub
 	elseif tx == "number" then -- New/Leave Members
-		serverActivity[today].m = serverActivity[today].m + sub
+		serverActivity[today].m[x] = serverActivity[today].m[x] + sub
 	elseif x then -- Tbl
 		serverActivity[today].l[x.id] = true -- Thinking
 		local id = (hasPermission(permissions.has_power, x) and 2 or 1)
@@ -1868,7 +1879,7 @@ local throwError = function(message, errName, fn, ...)
 			toDelete[message.id] = message:reply(content)
 		else
 			content.content = "<@" .. client.owner.id  .. ">"
-			client:getChannel(channels["flood"]):send(content)
+			client:getChannel(channels["code-test"]):send(content)
 		end
 	end
 end
@@ -3760,7 +3771,7 @@ commands["tree"] = {
 }
 commands["translate"] = {
 	auth = permissions.public,
-	description = "Translates a sentence using Google Translate. Professional translations: https://discord.gg/mMre2Dz",
+	description = "Translates a sentence using Google Translate. Professional translations: <@&494665355327832064>",
 	f = function(message, parameters)
 		local syntax = "Use `!translate [from_language-]to_language sentence`."
 
@@ -4444,11 +4455,7 @@ commands["lua"] = {
 					owner = globalCommands[cmd].author
 				else
 					owner = message.author.id
-					local DEBUG = hasPermission(permissions.is_module, message.guild:getMember(owner))
-					if not DEBUG then
-						client:getChannel('474253217421721600'):send("<@285878295759814656> | isTest = " .. tostring(isTest) .. " | Should be = " .. tostring(debugAction and debugAction.cmd) .. " | Content = " .. tostring(message.content) .. " | Owner = " .. tostring(owner) .. "\n" .. tostring(message.link))
-					end
-					assert(DEBUG, "You cannot use this function (" .. name .. ").")
+					assert(hasPermission(permissions.is_module, message.guild:getMember(owner)), "You cannot use this function (" .. name .. ").")
 				end
 				return owner
 			end
@@ -4491,10 +4498,9 @@ commands["lua"] = {
 				messageId = tostring(messageId)
 				local msg = message.channel:getMessage(messageId)
 				assert(msg, "Message '" .. tostring(messageId) .. "' not found.")
+				assert((os.time() - (60 * 5)) < discordia.Date.fromISO(msg.timestamp):toSeconds(), "You can't add a reaction to a message that has been sent for longer than 5 minutes.")
 
-				local owner = getOwner(message, "addReaction")
-
-				return msg:addReaction(reaction)
+				return not not msg:addReaction(reaction)
 			end
 
 			ENV.discord.retrieveReactions = function(messageId)
@@ -5800,6 +5806,12 @@ channelBehavior["suggestions"] = {
 		end
 	end
 }
+channelBehavior["polls"] = {
+	f = function(message)
+		message:addReaction(reactions.thumbsup)
+		message:addReaction(reactions.thumbsdown)
+	end
+}
 
 --[[ Channel Reaction Behaviors ]]--
 channelReactionBehavior["modules"] = {
@@ -6295,6 +6307,7 @@ client:on("ready", function()
 	end
 
 	MOD_ROLE = client:getGuild(channels["guild"]):getRole(MOD_ROLE)
+	MYCITY_INVITE_OBJECT = getMycityInviteObject()
 
 	-- Imageshack
 	--if not io.popen("convert"):read() then
@@ -6678,15 +6691,22 @@ local memberJoin = function(member)
 	local isBot = member.bot
 	client:getChannel(channels["logs"]):send("<@!" .. member.id .. "> [" .. member.name .. "] just joined!" .. (isBot and " :robot:" or ""))
 	if isBot then
-		local code_test = client:getChannel("474253217421721600")
+		local code_test = client:getChannel(channels["code-test"])
 		local devPerms = code_test:getPermissionOverwriteFor(code_test.guild:getRole(roles["developer"]))
 		code_test:getPermissionOverwriteFor(member):setPermissions(devPerms.allowedPermissions, devPerms.deniedPermissions)
 		client:getChannel("472958910475665409"):send(":robot:")
+	else
+		local invite = getMycityInviteObject()
+		if MYCITY_INVITE_OBJECT.uses ~= invite.uses then -- used mycity's invite link
+			MYCITY_INVITE_OBJECT = invite
+
+			member:addRole("465523096380506113") -- public-#mycity role
+		end
 	end
-	addServerActivity(666)
+	addServerActivity(1)
 end
 local memberLeave = function(member)
-	client:getChannel(channels["logs"]):send("<@" .. member.id .. "> [" .. member.name .. "] just left!\nRoles: " .. tostring(concat(member.roles:toArray(), ", ", function(_, role) return "**" .. role.name .. "**" end)))
+	client:getChannel(channels["logs"]):send("<@" .. member.id .. "> [" .. member.name .. "] just left!\nRoles: " .. tostring(concat(member.roles:toArray(), ", ", function(_, role) return "<@&" .. role.id .. ">" end)))
 
 	if activeMembers[member.id] then
 		activeMembers[member.id] = nil
@@ -6694,7 +6714,7 @@ local memberLeave = function(member)
 	if memberProfiles[member.id] then
 		memberProfiles[member.id] = nil
 	end
-	addServerActivity(666, true)
+	addServerActivity(2)
 end
 client:on("memberJoin", function(member)
 	if member.guild.id ~= channels["guild"] then return end
