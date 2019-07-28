@@ -118,7 +118,9 @@ local channels = {
 	["mod-logs"] = "586271889467506727",
 	["region"] = "585174371774103582",
 	["code-test"] = "474253217421721600",
-	["polls"] = "595364384566673413"
+	["polls"] = "595364384566673413",
+	["role-log"] = "598894097419337755",
+	["greetings"] = "598898246500483072"
 }
 
 local botIds = {
@@ -357,7 +359,7 @@ do
 
 		permissionOverwrites.announcements.staff = permissionOverwrites.announcements.public
 	end
-	-- #module.@public-#module
+	-- #module.@#module
 	do
 		permissionOverwrites.public = { public = { } }
 
@@ -1205,7 +1207,14 @@ do
 				return true, code .. (data[index] and index or 1)
 			end,
 			description = "Your timezone (country_code [index]). `index can be a number associated to the index number displayed in !timezone code`"
-		}
+		},
+		insta = {
+			type = "string",
+			valid = function(x)
+				return string.find(x, "^%S+$") and (http.request("GET", "https://www.instagram.com/" .. x .. "/")).reason == "OK"
+			end,
+			description = "The name of your Instagram account."
+		},
 	}
 	profileStruct.bday = {
 		type = "string",
@@ -1511,6 +1520,7 @@ local getRoleOrder = function(member)
 end
 
 local getMycityInviteObject = function()
+	local invites = { }
 	for invite in client:getGuild(channels["guild"]):getInvites():iter() do
 		if invite.code == "QPyBwUh" then
 			return invite
@@ -1573,7 +1583,7 @@ local hasPermission = function(permission, member, message)
 		local module = message.channel.category and string.lower(message.channel.category.name) or nil
 		if not module then return auth end
 
-		local c = (permission == permissions.is_owner and "★ " or "[★ ]*")
+		local c = (permission == permissions.is_owner and "★ " or "⚙ ")
 
 		return not not member.roles:find(function(role)
 			return string.find(string.lower(role.name), "^" .. c .. module .. "$")
@@ -1739,7 +1749,7 @@ local save = function(fileName, db, raw, encodeBase64)
 	end
 	db = string.gsub(db, "%+", "((12))")
 
-	local http, body = http.request("POST", "http://discbotdb.000webhostapp.com/set?k=" .. tokens.discdb .. "&f=" .. fileName, {
+	local head, body = http.request("POST", "http://discbotdb.000webhostapp.com/set?k=" .. tokens.discdb .. "&f=" .. fileName, {
 		{ "Content-Type", "application/x-www-form-urlencoded" }
 	}, "d=" .. db)
 
@@ -3204,6 +3214,14 @@ commands["profile"] = {
 			}
 		end
 
+		if p.data.insta then
+			fields[#fields + 1] = {
+				name = "<:insta:605096338140430396> Instagram",
+				value = "[" .. p.data.insta .. "](https://instagram.com/" .. p.data.insta .. "/)",
+				inline = true
+			}
+		end
+		
 		if p.data.time then
 			local code, index = string.match(p.data.time, "^(..)(.*)")
 			code = string.upper(code)
@@ -3517,66 +3535,6 @@ commands["tex"] = {
 			end
 		else
 			sendError(message, "TEX", "Invalid or missing parameters.", "Use `!tex latex_formula`.")
-		end
-	end
-}
-commands["tfmprofile"] = {
-	auth = permissions.public,
-	description = "Displays your profile on Transformice.",
-	f = function(message, parameters)
-		if parameters and #parameters > 2 then
-			parameters = string.nickname(parameters)
-			local head, body = http.request("GET", "https://api.club-mice.com/mouse.php?name=" .. encodeUrl(parameters))
-			body = json.decode(body)
-
-			if body then
-				if not body.id then 
-					return sendError(message, "TFMPROFILE", "Player '" .. parameters .. "' not found.")
-				end
-
-				if not body.title_id then
-					body.title_id = "«Little Mouse»"
-				else
-					body.title_id = string.gsub(body.title_id, "&amp;", '&')
-					body.title_id = string.gsub(body.title_id, "\\u00ab", '«')
-					body.title_id = string.gsub(body.title_id, "\\u00bb", '»')
-				end
-
-				local level, remain, need = expToLvl(tonumber(body.experience))
-
-				local tribe
-				if body.id_tribe then
-					local _
-					_, tribe = http.request("GET", "https://api.club-mice.com/tribe.php?tribe=" .. body.id_tribe)
-					tribe = json.decode(tribe)
-					if tribe then
-						tribe = tribe.name
-					end
-				end
-
-				local soulmate
-				if body.id_spouse then
-					local _
-					_, soulmate = http.request("GET", "https://api.club-mice.com/mouse.php?name=" .. body.id_spouse)
-					soulmate = json.decode(soulmate)
-					if soulmate then
-						soulmate = soulmate.name
-					end
-				end
-
-				toDelete[message.id] = message:reply({
-					embed = {
-						color = color.atelier801,
-						title = "<:tfm_cheese:458404666926039053> Transformice Profile - " .. parameters .. (body.gender == "2" and " <:male:456193580155928588>" or body.gende == "1" and " <:female:456193579308679169>" or ""),
-						description = --[[(body.registration_date == "" and "" or (":calendar: " .. body.registration_date .. "\n\n")) .. ]]"**Level " .. level .. "** " .. getRate(math.percent(remain, (remain + need)), 100, 5) .. "\n" .. (tribe and ("\n<:tribe:458407729736974357> **Tribe :** " .. tribe) or "") .. --[["\n```\n" .. body.title_id .. "```"]]"\n<:shaman:512015935989612544> " .. body.saved_mice .. " / " .. body.saved_mice_hard .. " / " .. body.saved_mice_divine .. "\n<:tfm_cheese:458404666926039053> **Shaman cheese :** " .. body.shaman_cheese .. "\n\n<:racing:512016668038266890> **Firsts :** " .. body.first .. " " .. getRate(math.percent(body.first, body.round_played, 100), 100, 5) .. "\n<:tfm_cheese:458404666926039053> **Cheeses: ** " .. body.cheese_gathered .. " " .. getRate(math.percent(body.cheese_gathered, body.round_played, 100), 100, 5) .. "\n\n<:bootcamp:512017071031451654> **Bootcamps :** " .. body.bootcamp .. (soulmate and("\n\n:revolving_hearts: **" .. normalizeDiscriminator(soulmate) .. (body.marriage_date and ("** since **" .. body.marriage_date .. "**") or "**")) or ""),
-						thumbnail = { url = "http://avatars.atelier801.com/" .. (body.id % 10000) .. "/" .. body.id .. ".jpg" }
-					}
-				})
-			else 
-				return sendError(message, "TFMPROFILE", "Internal Error.", "Try again later.")
-			end
-		else 
-			return sendError(message, "TFMPROFILE", "Invalid or missing parameters.", "Use `!tfmprofile Playername`")
 		end
 	end
 }
@@ -4084,7 +4042,7 @@ commands["resign"] = {
 			parameters:removeRole(specialRoleColor[role.id])
 		end
 
-		message:reply({
+		local msg = {
 			embed = {
 				color = role.color,
 				title = "Demotion :(",
@@ -4092,7 +4050,9 @@ commands["resign"] = {
 				description = "**" .. parameters.name .. "** is not a(n) `" .. string.upper(role.name) .. "` anymore.",
 				footer = { text = "Unset by " .. message.member.name }
 			}
-		})
+		}
+		message:reply(msg)
+		client:getChannel(channels["role-log"]):send(msg)
 		message:delete()
 	end
 }
@@ -4717,7 +4677,7 @@ commands["public"] = {
 
 		if parameters and #parameters > 0 then
 			if not edition then
-				local public_role = message.guild:createRole("public-" .. category)
+				local public_role = message.guild:createRole(category)
 
 				local announcements_channel = message.channel.category.textChannels:find(function(c)
 					return c.name == "announcements"
@@ -4739,8 +4699,8 @@ commands["public"] = {
 
 				local staff_roles = { }
 				message.guild.roles:find(function(role)
-					if role.name == "★ " .. category or role.name == category then
-						staff_roles[string.sub(role.name, 1, 1) == "#" and "staff" or "owner"] = role
+					if role.name == "★ " .. category or role.name == "⚙ " .. category then
+						staff_roles[string.sub(role.name, 1, 1) == "⚙" and "staff" or "owner"] = role
 					end
 					return false
 				end)
@@ -4824,7 +4784,7 @@ commands["staff"] = {
 				end
 
 				local role = message.guild.roles:find(function(role)
-					return role.name == category
+					return role.name == "⚙ " .. category
 				end)
 
 				if role then
@@ -5085,12 +5045,12 @@ commands["module"] = {
 
 					if not c then
 						--[[
-							- #module -> @★ #module; #module
+							- #module -> @★ #module; @⚙ #module
 								~announcements
 								~discussion
 
 							[ May have ]
-							@public-#module
+							@#module
 							~chat
 						]]
 
@@ -5116,7 +5076,7 @@ commands["module"] = {
 						owner_role:setColor(roleColor.owner)
 						owner_role:moveUp(publicChannels + totalModules - 1)
 
-						local staff_role = message.guild:createRole(module)
+						local staff_role = message.guild:createRole("⚙ " .. module)
 						staff_role:moveUp(publicChannels - 1)
 
 						-- Permissions
@@ -5253,7 +5213,7 @@ commands["set"] = {
 								}
 							}
 							message:reply(msg)
-							client:getChannel(channels["mod-logs"]):send(msg)
+							client:getChannel(channels["role-log"]):send(msg)
 							message:delete()
 						else
 							sendError(message, "SET", "Member already have the role.")
@@ -5275,112 +5235,6 @@ commands["set"] = {
 	end
 }
 	-- Freeaccess
-commands["cleareact"] = {
-	description = "Refreshes the #modules reactions.",
-	f = function(message)
-		message.channel:broadcastTyping()
-
-		local channel = client:getChannel(channels["modules"])
-		local commu = client:getChannel(channels["commu"]):getMessages()--:getMessage("494675974034554890")
-
-		for member in message.guild.members:iter() do
-			if not member.bot then
-				for role in message.guild.roles:findAll(function(role) return string.find(role.name, "public") end) do
-					if member:hasRole(role.id) then
-						local module = string.match(role.name, "#(.+)")
-
-						local msg = client:getChannel(channels["modules"]):getMessages():find(function(msg)
-							return msg.embed and (msg.embed.title == module)
-						end)
-
-						if msg then
-							local reaction = msg.reactions:get(reactions.hand)
-
-							if reaction and not reaction:getUsers(100):get(member.id) then
-								member:removeRole(role.id)
-							end
-						end
-					end
-				end
-
-				for role in message.guild.roles:findAll(function(role) return #role.name == 2 end) do -- Community
-					local tentatives, reacted = 0
-					repeat
-						commu:find(function(msg)
-							if reacted then return end
-							msg.reactions:find(function(e)
-								if reacted then return end
-								local is = e.emojiName == countryFlags[role.name]
-								if is then
-									reacted = e
-									return
-								end
-							end)
-						end)
-						tentatives = tentatives + 1
-					until reacted or tentatives > 3
-					if reacted then
-						reacted = reacted:getUsers(100)
-						reacted = reacted:find(function(u) return u.id == member.id end)
-
-						if member:hasRole(role.id) then
-							if not reacted then
-								member:removeRole(role.id)
-								print("Removed role " .. role.name .. " from " .. member.name)
-							end
-						elseif reacted then
-							member:addRole(role.id)
-							print("Added role " .. role.name .. " to " .. member.name)
-						end
-					end
-				end
-			end
-		end
-
-		for msg in channel:getMessages():iter() do
-			if msg.reactions and msg.embed then
-				for reaction in msg.reactions:iter() do
-					for user in reaction:getUsers(100):iter() do
-						if not user.bot then
-							local member = msg.guild:getMember(user.id)
-
-							if not member then
-								msg:removeReaction(reaction.emojiName, user.id)
-							else
-								local role_name = "public-" .. msg.embed.title
-								local role = (msg.guild.roles:find(function(role)
-									return role_name == role.name
-								end)).id
-
-								if not member:hasRole(role) then
-									member:addRole(role)
-								end
-							end
-						end
-					end
-				end
-			end
-		end
-
-		commu:find(function(msg)
-			for reaction in msg.reactions:iter() do
-				for user in reaction:getUsers(100):iter() do
-					if not user.bot and not message.guild:getMember(user.id) then
-						msg:removeReaction(reaction.emojiName, user.id)
-					end
-				end
-			end
-		end)
-
-		message:reply({
-			embed = {
-				color = color.sys,
-				description = "The reactions were refreshed!"
-			}
-		})
-		message:delete()
-	end
-}
 commands["commu"] = {
 	description = "Creates a new community role.",
 	f = function(message, parameters)
@@ -5543,11 +5397,11 @@ commands["remmodule"] = {
 					end)
 
 					local staff_role = message.guild.roles:find(function(role)
-						return role.name == parameters
+						return role.name == "⚙ " .. parameters
 					end)
 
 					local public_role = message.guild.roles:find(function(role)
-						return role.name == "public-" .. parameters
+						return role.name == parameters
 					end)
 
 					if owner_role then
@@ -5800,9 +5654,11 @@ channelBehavior["priv-channels"] = {
 channelBehavior["suggestions"] = {
 	f = function(message)
 		if string.sub(message.content, 1, 22) == "<#" .. channels["suggestions"] .. "> " then
-			message:addReaction(reactions.thumbsup)
-			message:addReaction(reactions.thumbsdown)
-			message:pin()
+			if (os.time() - 60) < discordia.Date.fromISO(message.timestamp):toSeconds() then
+				message:addReaction(reactions.thumbsup)
+				message:addReaction(reactions.thumbsdown)
+				message:pin()
+			end
 		end
 	end
 }
@@ -5810,6 +5666,11 @@ channelBehavior["polls"] = {
 	f = function(message)
 		message:addReaction(reactions.thumbsup)
 		message:addReaction(reactions.thumbsdown)
+	end
+}
+channelBehavior["greetings"] = {
+	f = function(message)
+		message.channel:setTopic("Messages: " .. message.channel:getMessages(100):count() .. " / 100")
 	end
 }
 
@@ -5823,7 +5684,7 @@ channelReactionBehavior["modules"] = {
 
 			if member then
 				local role = channel.guild.roles:find(function(role)
-					return role.name == "public-" .. module
+					return role.name == module
 				end)
 
 				if role then
@@ -5842,7 +5703,7 @@ channelReactionBehavior["modules"] = {
 
 			if member then
 				local role = channel.guild.roles:find(function(role)
-					return role.name == "public-" .. module
+					return role.name == module
 				end)
 
 				if role then
@@ -6651,7 +6512,7 @@ messageDelete = function(message, skipChannelActivity)
 			if channelReactionBehavior[tostring(k)] then return end
 
 			client:getChannel(channels["chat-log"]):send({
-				content = "Message from " .. (message.member:hasRole(MOD_ROLE.id) and message.author.tag or ("<@" .. message.author.id .. ">")),
+				content = "Message from " .. (message.member and message.member:hasRole(MOD_ROLE.id) and message.author.tag or ("<@" .. message.author.id .. ">")),
 				embed = {
 					color = color.sys,
 					description = message.content,
@@ -6663,6 +6524,9 @@ messageDelete = function(message, skipChannelActivity)
 				}
 			})
 		--end
+	end
+	if message.channel.id == channels["greetings"] then
+		channelBehavior["greetings"].f(message)
 	end
 end
 local messageUpdate = function(message)
@@ -6689,19 +6553,24 @@ end)
 
 local memberJoin = function(member)
 	local isBot = member.bot
-	client:getChannel(channels["logs"]):send("<@!" .. member.id .. "> [" .. member.name .. "] just joined!" .. (isBot and " :robot:" or ""))
+	local isMycity = false
 	if isBot then
 		local code_test = client:getChannel(channels["code-test"])
 		local devPerms = code_test:getPermissionOverwriteFor(code_test.guild:getRole(roles["developer"]))
 		code_test:getPermissionOverwriteFor(member):setPermissions(devPerms.allowedPermissions, devPerms.deniedPermissions)
-		client:getChannel("472958910475665409"):send(":robot:")
+		client:getChannel("472958910475665409"):send(":robot: beep boop")
 	else
 		local invite = getMycityInviteObject()
 		if MYCITY_INVITE_OBJECT.uses ~= invite.uses then -- used mycity's invite link
 			MYCITY_INVITE_OBJECT = invite
 
-			member:addRole("465523096380506113") -- public-#mycity role
+			member:addRole("465523096380506113") -- #mycity role
+			isMycity = true
 		end
+	end
+	client:getChannel(channels["logs"]):send("<@!" .. member.id .. "> [" .. member.name .. "] just joined!" .. (isBot and " :robot:" or isMycity and " :house:" or ''))
+	if not isMycity and not isBot then
+		--client:getChannel("472958910475665409"):send(string.format(client:getChannel(channels["greetings"]):getMessages(100):random().content, "<@" .. member.id .. ">"))
 	end
 	addServerActivity(1)
 end
