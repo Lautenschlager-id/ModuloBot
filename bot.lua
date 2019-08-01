@@ -3217,7 +3217,7 @@ commands["profile"] = {
 		if p.data.insta then
 			fields[#fields + 1] = {
 				name = "<:insta:605096338140430396> Instagram",
-				value = "[" .. p.data.insta .. "](https://instagram.com/" .. p.data.insta .. "/)",
+				value = "[" .. string.gsub(p.data.insta, '_', "\\_") .. "](https://instagram.com/" .. p.data.insta .. "/)",
 				inline = true
 			}
 		end
@@ -4387,9 +4387,10 @@ commands["lua"] = {
 				ENV.guild = message.guild
 			else
 				if not isTest then
+					local errname = string.sub(os.tmpname(), 9)
 					local s = (hasPermission(permissions.is_module, message.member) and 10 or 5)
 					local runtime = os.time() + s
-					local snippet = 'if os.time()>' .. runtime .. ' then error(tostring(___RUNTIME_STR____),2) end '
+					local snippet = "if os.time()>" .. runtime .. " then " .. errname .. "(tostring(___RUNTIME_STR____),2) end "
 
 					local hasChanged, change = false
 					for _, pattern in next, { "while.-do[\n\r ]+", "repeat[\n\r ]+", "for .-=.- do[\n\r ]+", "for .- in .- do[\n\r ]+", "function[\n\r ]*%S-[\n\r ]-%(.-%)[\n\r ]+" } do
@@ -4400,7 +4401,7 @@ commands["lua"] = {
 					end
 
 					if hasChanged then
-						parameters = "local ___RUNTIME_STR____ = \"Your code has exceeded the runtime limit of " .. s .. "s.\"" .. parameters
+						parameters = "local " .. errname .. "=error local ___RUNTIME_STR____=\"Your code has exceeded the runtime limit of " .. s .. "s.\"" .. parameters
 					end
 				end
 			end
