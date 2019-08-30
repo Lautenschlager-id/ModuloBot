@@ -1297,7 +1297,7 @@ local buildMessage = function(msg, message)
 		fields = {
 			{
 				name = "Link",
-				value = "[Click here](" .. msg.link .. ")"
+				value = "[Click here](" .. tostring(msg.link) .. ")"
 			}
 		},
 
@@ -1863,6 +1863,41 @@ local splitByLine = function(content, max)
 	if #tmp > 0 then data[current] = tmp end
 
 	return data
+end
+
+local test
+do
+	local clock = os.clock
+	test = function(fList, rate)
+		local lenF = #fList
+
+		local avg, t, f = { }
+		for i = 1, lenF do
+			avg[i] = 0
+			for _ = 1, rate do
+				f = fList[i]
+
+				t = os.clock()
+				f()
+				t = clock() - t
+
+				avg[i] = avg[i] + t
+			end
+			avg[i] = avg[i] * rate * 100
+		end
+
+		for i = 1, lenF do
+			avg[i] = { i = i, avg = avg[i] }
+		end
+		table.sort(avg, function(f1, f2)
+			return f1.avg < f2.avg
+		end)
+
+		for i = 1, lenF do
+			avg[i] = ("#" .. i .. ". Test [" .. avg[i].i .. "] AVG: " .. avg[i].avg .. "s")
+		end
+		return avg, lenF
+	end
 end
 
 --[[Doc
@@ -4388,9 +4423,10 @@ commands["lua"] = {
 			else
 				if not isTest then
 					local errname = string.sub(os.tmpname(), 9)
+					local errmsg = string.sub(os.tmpname(), 9)
 					local s = (hasPermission(permissions.is_module, message.member) and 10 or 5)
 					local runtime = os.time() + s
-					local snippet = "if os.time()>" .. runtime .. " then " .. errname .. "(tostring(___RUNTIME_STR____),2) end "
+					local snippet = "if os.time()>" .. runtime .. " then " .. errname .. "(tostring(" .. errmsg .. "),2) end "
 
 					local hasChanged, change = false
 					for _, pattern in next, { "while.-do[\n\r ]+", "repeat[\n\r ]+", "for .-=.- do[\n\r ]+", "for .- in .- do[\n\r ]+", "function[\n\r ]*%S-[\n\r ]-%(.-%)[\n\r ]+" } do
@@ -4401,7 +4437,7 @@ commands["lua"] = {
 					end
 
 					if hasChanged then
-						parameters = "local " .. errname .. "=error local ___RUNTIME_STR____=\"Your code has exceeded the runtime limit of " .. s .. "s.\"" .. parameters
+						parameters = "local " .. errname .. "=error local " .. errmsg .. "=\"Your code has exceeded the runtime limit of " .. s .. "s.\"" .. parameters
 					end
 				end
 			end
@@ -4531,6 +4567,13 @@ commands["lua"] = {
 				return setmetatable(x, m)
 			end
 
+			ENV.test = function(...)
+				local t, l = test(...)
+				for i = 1, l do
+					ENV.print(t[i])
+				end
+			end
+			
 			local func, syntaxErr = load(parameters, '', 't', ENV)
 			if not func then
 				toDelete[message.id] = message:reply({
@@ -4960,7 +5003,7 @@ commands["gcmd"] = {
 			return sendError(message, "GCMD", "This command cannot be used for #modules. Use the command `!cmd` instead.")
 		end
 
-		local syntax = "Use `!gcmd 0|1|2 0|1|2 command_name [ script ``` script ``` ] [ value[[command_content]] ] [ title[[command_title]] ] [ description[[command_description]] ]`.\n\n[Click here to open the command generator](https://lautenschlager-id.github.io/gcmd-generator.github.io/)"
+		local syntax = "Use `!gcmd 0|1|2 0|1|2 command_name [ script ``` script ``` ] [ value[[command_content]] ] [ title[[command_title]] ] [ description[[command_description]] ]`.\n\n[Click here to open the command generator](https://fiftysol.github.io/gcmd-generator/)"
 
 		if parameters and #parameters > 0 then
 			local script, content, title, description = getCommandFormat(parameters)
