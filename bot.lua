@@ -5252,7 +5252,7 @@ commands["set"] = {
 									color = role.color,
 									title = "Promotion!",
 									thumbnail = { url = member.user.avatarURL },
-									description = "**" .. member.name .. "** is now " .. ((not not string.match(string.upper(role.name)), '^[AEIOU]')) and ' an ' or ' a ' ) .. `" .. string.upper(role.name) .. "`.",
+									description = "**" .. member.name .. "** is now " .. (string.find(role.name, "^[AEIOUaeiou]") and "a" or "an") .. " `" .. string.upper(role.name) .. "`.",
 									footer = { text = "Set by " .. message.member.name }
 								}
 							}
