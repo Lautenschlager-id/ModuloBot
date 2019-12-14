@@ -2053,6 +2053,40 @@ local getLuaEnv = function()
 	}
 end
 
+local addRuntimeLimit = function(parameters, message)
+	local errname = string.sub(os.tmpname(), 9)
+	local errmsg = string.sub(os.tmpname(), 9)
+	local s = (hasPermission(permissions.is_module, message.member) and 10 or 5)
+	local runtime = os.time() + s
+	local snippet = "if os.time()>" .. runtime .. " then " .. errname .. "(tostring(" .. errmsg .. "),2) end "
+
+	local loads = { }
+	for posini, posend in string.gmatch(parameters, "discord%.load[\n\r ]*%(().*()%)") do
+		loads[#loads + 1] = { posini, posend }
+	end
+	
+	local hasChanged, change = false
+	for _, pattern in next, { "()(while.-do[\n\r ]+)", "()(repeat[\n\r ]+)", "()(for .-=.- do[\n\r ]+)", "()(for .- in .- do[\n\r ]+)", "()(function[\n\r ]*%S-[\n\r ]-%(.-%)[\n\r ]+)" } do
+		parameters, change = string.gsub(parameters, pattern, function(pos, chunk)
+			for i = 1, #loads do
+				if not (loads[i][1] > pos and loads[i][2] < pos) then
+					return chunk
+				end
+			end
+			return chunk .. " " .. snippet
+		end)
+		if (change and change > 0) and not hasChanged then
+			hasChanged = true
+		end
+	end
+
+	if hasChanged then
+		parameters = "local " .. errname .. "=error local " .. errmsg .. "=\"Your code has exceeded the runtime limit of " .. s .. "s.\"" .. parameters
+	end
+
+	return parameters
+end
+
 local messageCreate, messageDelete
 
 --[[ Commands ]]--
@@ -2236,11 +2270,11 @@ commands["adoc"] = {
 	description = "Gets information about a specific tfm api function.",
 	f = function(message, parameters)
 		if parameters and #parameters > 0 then
-			local head, body = http.request("GET", "https://atelier801.com/topic?f=826122&t=924910")
+			local head, body = http.request("GET", "https://atelier801.com/topic?f=612619&t=934783")
 
 			if body then
 				body = string.gsub(string.gsub(body, "<br />", "\n"), " ", '')
-				local _, init = string.find(body, "id=\"message_19463601\">•")
+				local _, init = string.find(body, "id=\"message_19532184\">•")
 				body = string.sub(body, init)
 
 				local syntax, description = string.match(body, "•  (" .. parameters .. " .-)\n(.-)\n\n\n\n")
@@ -2525,6 +2559,14 @@ commands["color"] = {
 		else
 			sendError(message, "COLOR", "Invalid or missing parameters.", "Use `!color #hex_code` or `!color rgb(r, g, b)`.")
 		end
+	end
+}
+commands["conn"] = {
+	auth = permissions.public,
+	description = "Checks the BOT ping.",
+	f = function(message, parameters)
+		local m = message:reply("pong")
+		m:setContent("**Ping** : " .. string.format("%.3f", ((m.createdAt - message.createdAt) * 1000)) .. " ms.")
 	end
 }
 commands["doc"] = {
@@ -2958,9 +3000,9 @@ commands["mobile"] = {
 }
 commands["modules"] = {
 	auth = permissions.public,
-	description = "Lists the current modules available in Transformice. [by name | from community | level 1/2 | #pattern]",
+	description = "Lists the current modules available in Transformice. [by name | from community | level 0/1 | #pattern]",
 	f = function(message, parameters)
-		local head, body = http.request("GET", "https://atelier801.com/topic?f=826122&t=926606")
+		local head, body = http.request("GET", "https://atelier801.com/topic?f=612619&t=933743")
 
 		local search = {
 			a_commu = false, -- alias
@@ -3573,6 +3615,66 @@ commands["tex"] = {
 		end
 	end
 }
+commands["tfmprofile"] = {
+	auth = permissions.public,
+	description = "Displays your profile on Transformice.",
+	f = function(message, parameters)
+		if parameters and #parameters > 2 then
+			parameters = string.nickname(parameters)
+			local head, body = http.request("GET", "https://api.club-mice.com/mouse.php?name=" .. encodeUrl(parameters))
+			body = json.decode(body)
+
+			if body then
+				if not body.id then 
+					return sendError(message, "TFMPROFILE", "Player '" .. parameters .. "' not found.")
+				end
+
+				if not body.title_id then
+					body.title_id = "«Little Mouse»"
+				else
+					body.title_id = string.gsub(body.title_id, "&amp;", '&')
+					body.title_id = string.gsub(body.title_id, "\\u00ab", '«')
+					body.title_id = string.gsub(body.title_id, "\\u00bb", '»')
+				end
+
+				local level, remain, need = expToLvl(tonumber(body.experience))
+
+				local tribe
+				if body.id_tribe then
+					local _
+					_, tribe = http.request("GET", "https://api.club-mice.com/tribe.php?tribe=" .. body.id_tribe)
+					tribe = json.decode(tribe)
+					if tribe then
+						tribe = tribe.name
+					end
+				end
+
+				local soulmate
+				if body.id_spouse then
+					local _
+					_, soulmate = http.request("GET", "https://api.club-mice.com/mouse.php?name=" .. body.id_spouse)
+					soulmate = json.decode(soulmate)
+					if soulmate then
+						soulmate = soulmate.name
+					end
+				end
+
+				toDelete[message.id] = message:reply({
+					embed = {
+						color = color.atelier801,
+						title = "<:tfm_cheese:458404666926039053> Transformice Profile - " .. parameters .. (body.gender == "2" and " <:male:456193580155928588>" or body.gende == "1" and " <:female:456193579308679169>" or ""),
+						description = --[[(body.registration_date == "" and "" or (":calendar: " .. body.registration_date .. "\n\n")) .. ]]"**Level " .. level .. "** " .. getRate(math.percent(remain, (remain + need)), 100, 5) .. "\n" .. (tribe and ("\n<:tribe:458407729736974357> **Tribe :** " .. tribe) or "") .. --[["\n```\n" .. body.title_id .. "```"]]"\n<:shaman:512015935989612544> " .. body.saved_mice .. " / " .. body.saved_mice_hard .. " / " .. body.saved_mice_divine .. "\n<:tfm_cheese:458404666926039053> **Shaman cheese :** " .. body.shaman_cheese .. "\n\n<:racing:512016668038266890> **Firsts :** " .. body.first .. " " .. getRate(math.percent(body.first, body.round_played, 100), 100, 5) .. "\n<:tfm_cheese:458404666926039053> **Cheese: ** " .. body.cheese_gathered .. " " .. getRate(math.percent(body.cheese_gathered, body.round_played, 100), 100, 5) .. "\n\n<:bootcamp:512017071031451654> **Bootcamps :** " .. body.bootcamp .. (soulmate and("\n\n:revolving_hearts: **" .. normalizeDiscriminator(soulmate) .. (body.marriage_date and ("** since **" .. body.marriage_date .. "**") or "**")) or ""),
+						thumbnail = { url = "http://avatars.atelier801.com/" .. (body.id % 10000) .. "/" .. body.id .. ".jpg" }
+					}
+				})
+			else 
+				return sendError(message, "TFMPROFILE", "Internal Error.", "Try again later.")
+			end
+		else 
+			return sendError(message, "TFMPROFILE", "Invalid or missing parameters.", "Use `!tfmprofile Playername`")
+		end
+	end
+}
 commands["timezone"] = {
 	auth = permissions.public,
 	description = "Displays the timezone of a country.",
@@ -4148,14 +4250,6 @@ commands["cmd"] = {
 	end
 }
 	-- Developer
-commands["conn"] = {
-	auth = permissions.is_dev,
-	description = "Checks the BOT ping.",
-	f = function(message, parameters)
-		local m = message:reply("pong")
-		m:setContent("**Ping** : " .. string.format("%.3f", ((m.createdAt - message.createdAt) * 1000)) .. " ms.")
-	end
-}
 commands["lua"] = {
 	auth = permissions.is_dev,
 	description = "Loads a Lua code.",
@@ -4378,7 +4472,7 @@ commands["lua"] = {
 			ENV.discord.load = function(src)
 				assert(src, "Source can't be nil in discord.load")
 
-				return load(src, '', 't', ENV)
+				return load(addRuntimeLimit(src, message), '', 't', ENV)
 			end
 			--[[Doc
 				"The time, in minutes, since the last bot reboot"
@@ -4396,8 +4490,8 @@ commands["lua"] = {
 				dataLines[#dataLines + 1] = r == '' and ' ' or r
 			end
 
-			ENV.printt = function(s)
-				s = table.tostring(s)
+			ENV.printt = function(s, ...)
+				s = table.tostring(s, true, true, ...)
 				return ENV.print((#s < 1900 and ("```Lua\n" .. s .. "```") or s))
 			end
 
@@ -4422,23 +4516,7 @@ commands["lua"] = {
 				ENV.guild = message.guild
 			else
 				if not isTest then
-					local errname = string.sub(os.tmpname(), 9)
-					local errmsg = string.sub(os.tmpname(), 9)
-					local s = (hasPermission(permissions.is_module, message.member) and 10 or 5)
-					local runtime = os.time() + s
-					local snippet = "if os.time()>" .. runtime .. " then " .. errname .. "(tostring(" .. errmsg .. "),2) end "
-
-					local hasChanged, change = false
-					for _, pattern in next, { "while.-do[\n\r ]+", "repeat[\n\r ]+", "for .-=.- do[\n\r ]+", "for .- in .- do[\n\r ]+", "function[\n\r ]*%S-[\n\r ]-%(.-%)[\n\r ]+" } do
-						parameters, change = string.gsub(parameters, pattern, "%1 " .. snippet)
-						if (change and change > 0) and not hasChanged then
-							hasChanged = true
-						end
-					end
-
-					if hasChanged then
-						parameters = "local " .. errname .. "=error local " .. errmsg .. "=\"Your code has exceeded the runtime limit of " .. s .. "s.\"" .. parameters
-					end
+					parameters = addRuntimeLimit(parameters, message)
 				end
 			end
 
@@ -6123,13 +6201,13 @@ do
 		if log.changes then
 			fields[1] = {
 				name = "Changes",
-				value = "```Lua\n" .. table.tostring(log.changes) .. "```"
+				value = "```Lua\n" .. table.tostring(log.changes, true, true) .. "```"
 			}
 		end
 		if log.options then
 			fields[#fields + 1] = {
 				name = "Options",
-				value = "```Lua\n" .. table.tostring(log.options) .. "```"
+				value = "```Lua\n" .. table.tostring(log.options, true, true) .. "```"
 			}
 		end
 		if log.reason then
