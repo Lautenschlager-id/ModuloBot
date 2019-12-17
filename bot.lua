@@ -3873,6 +3873,14 @@ commands["translate"] = {
 		if parameters and #parameters > 0 then
 			local language, content = string.match(parameters, "(%S+)[ \n]+(.+)$")
 			if language and content and #content > 0 then
+				if #content == 18 and tonumber(content) then
+					local msgContent = message.channel:getMessage(content)
+					if msgContent then
+						msgContent = msgContent.content or (msgContent.embed and msgContent.embed.description)
+						content = (msgContent and (string.gsub(msgContent, '`', '')) or content)
+					end
+				end
+
 				language = string.lower(language)
 				local sourceLanguage, targetLanguage = string.match(language, "^(..)[%-~]>?(..)$")
 				if not sourceLanguage then
