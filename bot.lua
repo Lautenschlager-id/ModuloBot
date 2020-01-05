@@ -1751,7 +1751,7 @@ local save = function(fileName, db, raw, encodeBase64)
 
 	local head, body = http.request("POST", "http://discbotdb.000webhostapp.com/set?k=" .. tokens.discdb .. "&f=" .. fileName, {
 		{ "Content-Type", "application/x-www-form-urlencoded" }
-	}, "d=" .. db)
+	}, db)
 
 	return body == "true"
 end
@@ -1894,7 +1894,7 @@ do
 		end)
 
 		for i = 1, lenF do
-			avg[i] = ("#" .. i .. ". Test [" .. avg[i].i .. "] AVG: " .. avg[i].avg .. "s")
+			avg[i] = ("#" .. i .. ". Test [" .. avg[i].i .. "] AVG: " .. avg[i].avg .. "ms")
 		end
 		return avg, lenF
 	end
