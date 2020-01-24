@@ -344,7 +344,8 @@ do
 			allowed = table.sum(permissionOverwrites.module.staff.allowed, {
 				"sendMessages",
 				"manageMessages",
-				"mentionEveryone"
+				"mentionEveryone",
+				"manageWebhooks"
 			}),
 			denied = { }
 		}
@@ -1436,7 +1437,7 @@ local getCommandTable = function(message, script, content, title, description)
 		title = title, -- Embed title
 		desc = content, -- Embed description
 		url = url -- Embed image
-	}	
+	}
 end
 --[[Doc
 	~
@@ -2054,17 +2055,18 @@ local getLuaEnv = function()
 end
 
 local addRuntimeLimit = function(parameters, message)
+	local os_time = string.sub(os.tmpname(), 9)
 	local errname = string.sub(os.tmpname(), 9)
 	local errmsg = string.sub(os.tmpname(), 9)
 	local s = (hasPermission(permissions.is_module, message.member) and 10 or 5)
 	local runtime = os.time() + s
-	local snippet = "if os.time()>" .. runtime .. " then " .. errname .. "(tostring(" .. errmsg .. "),2) end "
+	local snippet = "if " .. os_time .. "()>" .. runtime .. " then " .. errname .. "(tostring(" .. errmsg .. "),2) end "
 
 	local loads = { }
 	for posini, posend in string.gmatch(parameters, "discord%.load[\n\r ]*%(().*()%)") do
 		loads[#loads + 1] = { posini, posend }
 	end
-	
+
 	local hasChanged, change = false
 	for _, pattern in next, { "()(while.-do[\n\r ]+)", "()(repeat[\n\r ]+)", "()(for .-=.- do[\n\r ]+)", "()(for .- in .- do[\n\r ]+)", "()(function[\n\r ]*%S-[\n\r ]-%(.-%)[\n\r ]+)" } do
 		parameters, change = string.gsub(parameters, pattern, function(pos, chunk)
@@ -2081,7 +2083,7 @@ local addRuntimeLimit = function(parameters, message)
 	end
 
 	if hasChanged then
-		parameters = "local " .. errname .. "=error local " .. errmsg .. "=\"Your code has exceeded the runtime limit of " .. s .. "s.\"" .. parameters
+		parameters = "local " .. errname .. "=error local " .. os_time .. "=os.time local " .. errmsg .. "=\"Your code has exceeded the runtime limit of " .. s .. "s.\"" .. parameters
 	end
 
 	return parameters
@@ -2574,7 +2576,7 @@ commands["doc"] = {
 	description = "Gets information about a specific lua function.",
 	f = function(message, parameters)
 		if parameters and #parameters > 0 then
-			local head, body = http.request("GET", "http://www.lua.org/work/doc/manual.html")
+			local head, body = http.request("GET", "http://www.lua.org/manual/5.2/manual.html")
 
 			if body then
 				local syntax, description = string.match(body, "<a name=\"pdf%-" .. parameters .. "\"><code>(.-)</code></a></h3>[\n<p>]*(.-)<h[r2]>")
@@ -3174,7 +3176,7 @@ commands["profile"] = {
 		if hasPermission(permissions.is_mod, p.discord) then
 			icon = icon .. permIcons.is_mod
 		end
-		if hasPermission(permissions.has_power, p.discord) then	
+		if hasPermission(permissions.has_power, p.discord) then
 			if hasPermission(permissions.is_module, p.discord) then
 				icon = icon .. permIcons.is_module
 				if p.data[1] and table.count(p.data[1]) > 0 then
@@ -3298,7 +3300,7 @@ commands["profile"] = {
 				inline = true
 			}
 		end
-		
+
 		if p.data.time then
 			local code, index = string.match(p.data.time, "^(..)(.*)")
 			code = string.upper(code)
@@ -3584,7 +3586,7 @@ commands["serverinfo"] = {
 							return member:hasRole(roles["fashionista"])
 						end), members:count(function(member)
 							return member:hasRole(roles["writer"])
-						end)), 
+						end)),
 						inline = false
 					},
 					[8] = {
@@ -3621,56 +3623,43 @@ commands["tfmprofile"] = {
 	f = function(message, parameters)
 		if parameters and #parameters > 2 then
 			parameters = string.nickname(parameters)
-			local head, body = http.request("GET", "https://api.club-mice.com/mouse.php?name=" .. encodeUrl(parameters))
+			local head, body = http.request("GET", "https://cheese.formice.com/api/mouse/@" .. encodeUrl(parameters))
 			body = json.decode(body)
 
 			if body then
-				if not body.id then 
+				if not body.id then
 					return sendError(message, "TFMPROFILE", "Player '" .. parameters .. "' not found.")
-				end
-
-				if not body.title_id then
-					body.title_id = "«Little Mouse»"
-				else
-					body.title_id = string.gsub(body.title_id, "&amp;", '&')
-					body.title_id = string.gsub(body.title_id, "\\u00ab", '«')
-					body.title_id = string.gsub(body.title_id, "\\u00bb", '»')
 				end
 
 				local level, remain, need = expToLvl(tonumber(body.experience))
 
-				local tribe
-				if body.id_tribe then
-					local _
-					_, tribe = http.request("GET", "https://api.club-mice.com/tribe.php?tribe=" .. body.id_tribe)
-					tribe = json.decode(tribe)
-					if tribe then
-						tribe = tribe.name
-					end
-				end
-
 				local soulmate
 				if body.id_spouse then
 					local _
-					_, soulmate = http.request("GET", "https://api.club-mice.com/mouse.php?name=" .. body.id_spouse)
+					_, soulmate = http.request("GET", "https://cheese.formice.com/api/mouse/:" .. body.id_spouse)
 					soulmate = json.decode(soulmate)
 					if soulmate then
 						soulmate = soulmate.name
 					end
 				end
 
+				local playerTitle = title[title._id[body.title * 1]].name
+				if type(playerTitle) == "table" then
+					playerTitle = playerTitle[(body.id_gender % 2 + 1)]
+				end
+
 				toDelete[message.id] = message:reply({
 					embed = {
 						color = color.atelier801,
-						title = "<:tfm_cheese:458404666926039053> Transformice Profile - " .. parameters .. (body.gender == "2" and " <:male:456193580155928588>" or body.gende == "1" and " <:female:456193579308679169>" or ""),
-						description = --[[(body.registration_date == "" and "" or (":calendar: " .. body.registration_date .. "\n\n")) .. ]]"**Level " .. level .. "** " .. getRate(math.percent(remain, (remain + need)), 100, 5) .. "\n" .. (tribe and ("\n<:tribe:458407729736974357> **Tribe :** " .. tribe) or "") .. --[["\n```\n" .. body.title_id .. "```"]]"\n<:shaman:512015935989612544> " .. body.saved_mice .. " / " .. body.saved_mice_hard .. " / " .. body.saved_mice_divine .. "\n<:tfm_cheese:458404666926039053> **Shaman cheese :** " .. body.shaman_cheese .. "\n\n<:racing:512016668038266890> **Firsts :** " .. body.first .. " " .. getRate(math.percent(body.first, body.round_played, 100), 100, 5) .. "\n<:tfm_cheese:458404666926039053> **Cheese: ** " .. body.cheese_gathered .. " " .. getRate(math.percent(body.cheese_gathered, body.round_played, 100), 100, 5) .. "\n\n<:bootcamp:512017071031451654> **Bootcamps :** " .. body.bootcamp .. (soulmate and("\n\n:revolving_hearts: **" .. normalizeDiscriminator(soulmate) .. (body.marriage_date and ("** since **" .. body.marriage_date .. "**") or "**")) or ""),
+						title = "<:tfm_cheese:458404666926039053> Transformice Profile - " .. parameters .. (body.id_gender == 2 and " <:male:456193580155928588>" or body.id_gender == 1 and " <:female:456193579308679169>" or ""),
+						description = --[[(body.registration_date == "" and "" or (":calendar: " .. body.registration_date .. "\n\n")) .. ]]"**Level " .. level .. "** " .. getRate(math.percent(remain, (remain + need)), 100, 5) .. "\n" .. (body.tribe_name and ("\n<:tribe:458407729736974357> **Tribe :** " .. body.tribe_name) or "") .. "\n:star: «" .. playerTitle .. "»\n<:shaman:512015935989612544> " .. body.saved_mice .. " / " .. body.saved_mice_hard .. " / " .. body.saved_mice_divine .. "\n<:tfm_cheese:458404666926039053> **Shaman cheese :** " .. body.shaman_cheese .. "\n\n<:racing:512016668038266890> **Firsts :** " .. body.first .. " " .. getRate(math.percent(body.first, body.round_played, 100), 100, 5) .. "\n<:tfm_cheese:458404666926039053> **Cheese: ** " .. body.cheese_gathered .. " " .. getRate(math.percent(body.cheese_gathered, body.round_played, 100), 100, 5) .. "\n\n<:bootcamp:512017071031451654> **Bootcamps :** " .. body.bootcamp .. (soulmate and("\n\n:revolving_hearts: **" .. normalizeDiscriminator(soulmate) .. (body.marriage_date and ("** since **" .. os.date("%x %X", body.marriage_date) .. "**") or "**")) or ""),
 						thumbnail = { url = "http://avatars.atelier801.com/" .. (body.id % 10000) .. "/" .. body.id .. ".jpg" }
 					}
 				})
-			else 
+			else
 				return sendError(message, "TFMPROFILE", "Internal Error.", "Try again later.")
 			end
-		else 
+		else
 			return sendError(message, "TFMPROFILE", "Invalid or missing parameters.", "Use `!tfmprofile Playername`")
 		end
 	end
@@ -3846,7 +3835,7 @@ commands["tree"] = {
 		end)
 
 		local lines = splitByLine(concat(sortedSrc, "\n", function(index, value)
-			return "`" .. value[3] .. "` **" .. value[1] .. "** : `" .. value[2] .. "`" 
+			return "`" .. value[3] .. "` **" .. value[1] .. "** : `" .. value[2] .. "`"
 		end))
 
 		local msgs = { }
@@ -4659,7 +4648,7 @@ commands["lua"] = {
 					ENV.print(t[i])
 				end
 			end
-			
+
 			local func, syntaxErr = load(parameters, '', 't', ENV)
 			if not func then
 				toDelete[message.id] = message:reply({
@@ -4743,7 +4732,7 @@ commands["delcmd"] = {
 	f = function(message, parameters, category)
 		local syntax = "Use `!delcmd command_name`."
 
-		if parameters and #parameters > 0 then 
+		if parameters and #parameters > 0 then
 			local command = string.match(parameters, "(%a[%w_%-]+)")
 
 			if command and modules[category] then
@@ -4779,7 +4768,7 @@ commands["prefix"] = {
 	f = function(message, parameters, category)
 		local syntax = "Use `!prefix prefix(1|2 characters)`."
 
-		if parameters and #parameters > 0 and #parameters < 3 then 
+		if parameters and #parameters > 0 and #parameters < 3 then
 			modules[category].prefix = (parameters):gsub("[%(%)%.%%%+%-%*%?%[%]%^%$]", "%%%0")
 
 			save("b_modules", modules, false, true)
@@ -4963,7 +4952,7 @@ commands["delgcmd"] = {
 	f = function(message, parameters, category)
 		local syntax = "Use `!delgcmd command_name`."
 
-		if parameters and #parameters > 0 then 
+		if parameters and #parameters > 0 then
 			local command = string.match(parameters, "(%a[%w_%-]+)")
 
 			if command then
@@ -6476,7 +6465,7 @@ end
 messageCreate = function(message, skipChannelActivity)
 	-- Ignore its own messages
 	if message.author.id == client.user.id then return end
-	
+
 	-- Channel behavior system (Output)
 	for k, v in next, channelBehavior do
 		if v.output and channels[k] and message.channel.id == channels[k] then
@@ -6606,7 +6595,7 @@ messageCreate = function(message, skipChannelActivity)
 end
 messageDelete = function(message, skipChannelActivity)
 	if not message.guild or message.guild.id ~= channels["guild"] then return end
-	
+
 	if toDelete[message.id] then
 		local msg
 		for id = 1, #toDelete[message.id] do
@@ -6820,7 +6809,7 @@ local reactionAdd = function(cached, channel, messageId, hash, userId)
 							if update then
 								if playingAkinator[userId].data.step == 0 then
 									msg:removeReaction(playingAkinator.__REACTIONS[#playingAkinator.__REACTIONS])
-								elseif playingAkinator[userId].data.step == 1 then 
+								elseif playingAkinator[userId].data.step == 1 then
 									msg:addReaction(playingAkinator.__REACTIONS[#playingAkinator.__REACTIONS])
 								end
 
