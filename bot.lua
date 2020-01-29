@@ -2055,35 +2055,35 @@ local getLuaEnv = function()
 end
 
 local addRuntimeLimit = function(parameters, message)
-	local os_time = string.sub(os.tmpname(), 9)
-	local errname = string.sub(os.tmpname(), 9)
-	local errmsg = string.sub(os.tmpname(), 9)
+	local func = string.sub(os.tmpname(), 9)
 	local s = (hasPermission(permissions.is_module, message.member) and 10 or 5)
 	local runtime = os.time() + s
-	local snippet = "if " .. os_time .. "()>" .. runtime .. " then " .. errname .. "(tostring(" .. errmsg .. "),2) end "
+	local snippet = func .. "() "
 
 	local loads = { }
-	for posini, posend in string.gmatch(parameters, "discord%.load[\n\r ]*%(().*()%)") do
-		loads[#loads + 1] = { posini, posend }
+	for posini, posend in string.gmatch(parameters, "discord[\n\r ]*%.[\n\r ]*load[\n\r ]*()%b()()") do -- It's ignored so that the function can be called in discord.load itself
+		loads[#loads + 1] = { posini + 1, posend - 1 }
 	end
 
 	local hasChanged, change = false
 	for _, pattern in next, { "()(while.-do[\n\r ]+)", "()(repeat[\n\r ]+)", "()(for .-=.- do[\n\r ]+)", "()(for .- in .- do[\n\r ]+)", "()(function[\n\r ]*%S-[\n\r ]-%(.-%)[\n\r ]+)" } do
 		parameters, change = string.gsub(parameters, pattern, function(pos, chunk)
 			for i = 1, #loads do
-				if not (loads[i][1] > pos and loads[i][2] < pos) then
+				if (loads[i][1] < pos and loads[i][2] > pos) then
 					return chunk
 				end
 			end
 			return chunk .. " " .. snippet
 		end)
-		if (change and change > 0) and not hasChanged then
+		if not hasChanged and (change and change > 0) then
 			hasChanged = true
 		end
 	end
 
 	if hasChanged then
-		parameters = "local " .. errname .. "=error local " .. os_time .. "=os.time local " .. errmsg .. "=\"Your code has exceeded the runtime limit of " .. s .. "s.\"" .. parameters
+		local s = (hasPermission(permissions.is_module, message.member) and 10 or 5)
+		local runtime = os.time() + s
+		parameters = "local " .. func .. " do local t,r,e,m,ts=os.time," .. runtime .. ",error,\"Your code has exceeded the runtime limit of " .. s .. "s.\",tostring " .. func .. "=function() if t()>r then e(ts(m),2) end end end " .. parameters
 	end
 
 	return parameters
@@ -4649,6 +4649,14 @@ commands["lua"] = {
 				end
 			end
 
+			local mainCoro = coroutine.running()
+			ENV.discord.yield = function(...)
+				if coroutine.running() ~= mainCoro then
+					return coroutine.yield(...)
+				end
+				error("Can not yield main thread.", 2)
+			end
+
 			local func, syntaxErr = load(parameters, '', 't', ENV)
 			if not func then
 				toDelete[message.id] = message:reply({
@@ -6303,6 +6311,8 @@ client:on("ready", function()
 
 	moduleENV = setmetatable({}, {
 		__index = setmetatable({
+			coroutine = { wrap = coroutine.wrap, running = coroutine.running, status = coroutine.status, create = coroutine.create, resume = coroutine.resume },
+
 			json = { encode = json.encode, decode = json.decode },
 
 			os = { clock = os.clock, date = os.date, difftime = os.difftime, time = os.time }
@@ -6322,6 +6332,7 @@ client:on("ready", function()
 			client = client,
 			cmdData = cmdData,
 			commands = commands,
+			coroutine = coroutine,
 			currency = currency,
 
 			discordia = discordia,
@@ -6356,6 +6367,7 @@ client:on("ready", function()
 			setPermissions = setPermissions,
 
 			throwError = throwError,
+			timer = timer,
 			tokens = tokens,
 
 			updateCurrency = updateCurrency
