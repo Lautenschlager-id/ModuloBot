@@ -4577,7 +4577,7 @@ commands["lua"] = {
 
 			ENV.discord.getAllMembers = function(f)
 				assert(f, "f can't be nil in discord.getAllMembers")
-				assert(type(f) ~= "function", "f must be a function(member) in discord.getAllMembers")
+				assert(type(f) == "function", "f must be a function(member) in discord.getAllMembers")
 
 				getOwner(message, "getAllMembers")
 
