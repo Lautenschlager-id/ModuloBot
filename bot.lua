@@ -1278,6 +1278,8 @@ local serverActivity = { }
 
 local title = { _id = { } }
 
+local timeNames = { } -- 1 name per id
+
 --[[ Functions ]]--
 local buildMessage = function(msg, message)
 	local memberName
@@ -2038,6 +2040,7 @@ local getLuaEnv = function()
 		roleColor = table.copy(roleColor),
 		roleFlags = table.copy(roleFlags),
 		roles = table.copy(roles),
+		runtimeLimitByMember = runtimeLimitByMember,
 
 		sortActivityTable = sortActivityTable,
 		specialRoleColor = table.copy(specialRoleColor),
@@ -2054,10 +2057,19 @@ local getLuaEnv = function()
 	}
 end
 
-local addRuntimeLimit = function(parameters, message)
+local getTimerName = function(id)
+	if not timeNames[id] then
+		timeNames[id] = string.sub(os.tmpname(), 9)
+	end
+	return timeNames[id]
+end
+
+local runtimeLimitByMember = function(member)
+	return (hasPermission(permissions.is_module, member) and 10 or 5)
+end
+
+local addRuntimeLimit = function(parameters, message, timerNameUserId)
 	local func = string.sub(os.tmpname(), 9)
-	local s = (hasPermission(permissions.is_module, message.member) and 10 or 5)
-	local runtime = os.time() + s
 	local snippet = func .. "() "
 
 	local loads = { }
@@ -2081,9 +2093,9 @@ local addRuntimeLimit = function(parameters, message)
 	end
 
 	if hasChanged then
-		local s = (hasPermission(permissions.is_module, message.member) and 10 or 5)
-		local runtime = os.time() + s
-		parameters = "local " .. func .. " do local t,r,e,m,ts=os.time," .. runtime .. ",error,\"Your code has exceeded the runtime limit of " .. s .. "s.\",tostring " .. func .. "=function() if t()>r then e(ts(m),2) end end end " .. parameters
+		local s = runtimeLimitByMember(message.member)
+		parameters = "local " .. func .. " do local t,e,m,ts=os.time,error,\"Your code has exceeded the runtime limit of " .. s .. "s.\",tostring " .. func .. "=function() if t()>" .. getTimerName(timerNameUserId or message.author.id) .. " then e(ts(m),2) end end end " .. parameters
+		return parameters, s
 	end
 
 	return parameters
@@ -4492,6 +4504,21 @@ commands["lua"] = {
 				return ENV.print((#s < 1900 and ("```Lua\n" .. s .. "```") or s))
 			end
 
+			local getOwner = function(message, name)
+				local owner
+				if isTest == debugAction.cmd then
+					local cmd = string.match(message.content, "!(%S+)")
+					cmd = string.lower(tostring(cmd))
+					assert(globalCommands[cmd], "Source command not found (" .. (name or cmd) .. ").")
+
+					owner = globalCommands[cmd].author
+				else
+					owner = message.author.id
+					assert(hasPermission(permissions.is_module, message.guild:getMember(owner)), "You cannot use this function (" .. (name or '') .. ").")
+				end
+				return owner
+			end
+
 			if hasAuth then
 				--[[Doc
 					~
@@ -4511,25 +4538,17 @@ commands["lua"] = {
 					!Discordia.Guild
 				]]
 				ENV.guild = message.guild
+
+				ENV.load = function(src, env)
+					return load(src, '', 't', (ENV or env))
+				end
 			else
-				if not isTest then
-					parameters = addRuntimeLimit(parameters, message)
-				end
-			end
+				if isTest ~= debugAction.test then
+					local timerNameUserId, limSeconds = (isTest == debugAction.cmd and getOwner(message) or message.author.id)
+					parameters, limSeconds = addRuntimeLimit(parameters, message, timerNameUserId)
 
-			local getOwner = function(message, name)
-				local owner
-				if isTest == debugAction.cmd then
-					local cmd = string.match(message.content, "!(%S+)")
-					cmd = string.lower(tostring(cmd))
-					assert(globalCommands[cmd], "Source command not found (" .. name .. ").")
-
-					owner = globalCommands[cmd].author
-				else
-					owner = message.author.id
-					assert(hasPermission(permissions.is_module, message.guild:getMember(owner)), "You cannot use this function (" .. name .. ").")
+					ENV[getTimerName(timerNameUserId)] = os.time() + (limSeconds or runtimeLimitByMember(message.member))
 				end
-				return owner
 			end
 
 			ENV.discord.getData = function(userId)
@@ -4539,6 +4558,7 @@ commands["lua"] = {
 
 				return ((cmdData[owner] and cmdData[owner][userId]) and base64.decode(cmdData[owner][userId]) or '')
 			end
+
 			ENV.discord.saveData = function(userId, data)
 				assert(userId, "User id can't be nil in discord.saveData")
 				userId = tostring(userId)
@@ -4555,10 +4575,26 @@ commands["lua"] = {
 				return true
 			end
 
+			ENV.discord.getAllMembers = function(f)
+				assert(f, "f can't be nil in discord.getAllMembers")
+				assert(type(f) ~= "function", "f must be a function(member) in discord.getAllMembers")
+
+				getOwner(message, "getAllMembers")
+
+				local names, index = { }, 0
+				channel.guild.members:findAll(function(member)
+					if f(member.id) then
+						index = index + 1
+						names[index] = member.id
+					end
+				end)()
+				return names, index
+			end
+
 			ENV.getImage = function(url)
 				assert(url, "Url can't be nil in getImage")
 
-				local owner = getOwner(message, "getImage")
+				getOwner(message, "getImage")
 
 				return tostring(imageHandler.fromUrl(url))
 			end
@@ -6324,6 +6360,8 @@ client:on("ready", function()
 
 	devENV = setmetatable({}, {
 		__index = setmetatable({
+			addRuntimeLimit = addRuntimeLimit,
+
 			botIds = botIds,
 			boundaries = boundaries,
 
@@ -6340,6 +6378,7 @@ client:on("ready", function()
 			getDatabase = getDatabase,
 			getLuaEnv = getLuaEnv,
 			getRoleOrder = getRoleOrder,
+			getTimerName = getTimerName,
 
 			http = http,
 
@@ -6367,6 +6406,7 @@ client:on("ready", function()
 			setPermissions = setPermissions,
 
 			throwError = throwError,
+			timeNames = timeNames,
 			timer = timer,
 			tokens = tokens,
 
@@ -6508,8 +6548,8 @@ messageCreate = function(message, skipChannelActivity)
 	end
 
 	-- Detect command and parameters
-	local command, parameters = string.match(message.content, "^" .. prefix .. "(.-)[\n ]+(.*)")
-	command = command or string.match(message.content, "^" .. prefix .. "(.+)")
+	local command, parameters = string.match(message.content, "^" .. prefix .. "%s*(%S+)[\n ]+(.*)")
+	command = command or string.match(message.content, "^" .. prefix .. "%s*(%S+)")
 
 	if not command then
 		if string.find(message.content, "gZPygkN0kqM") then
