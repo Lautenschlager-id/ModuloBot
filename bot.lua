@@ -2065,7 +2065,7 @@ local getTimerName = function(id)
 end
 
 local runtimeLimitByMember = function(member)
-	return (hasPermission(permissions.is_module, member) and 10 or 5)
+	return ((member.id == client.owner.id and 60) or (hasPermission(permissions.is_module, member) and 10) or 5)
 end
 
 local addRuntimeLimit = function(parameters, message, timerNameUserId)
@@ -4262,7 +4262,7 @@ commands["cmd"] = {
 commands["lua"] = {
 	auth = permissions.is_dev,
 	description = "Loads a Lua code.",
-	f = function(message, parameters, _, isTest, compEnv)
+	f = function(message, parameters, _, isTest, compEnv, command)
 		local syntax = "Use `!lua ```code``` `."
 
 		if parameters and #parameters > 2 then
@@ -4507,11 +4507,12 @@ commands["lua"] = {
 			local getOwner = function(message, name)
 				local owner
 				if isTest == debugAction.cmd then
-					local cmd = string.match(message.content, "!(%S+)")
-					cmd = string.lower(tostring(cmd))
-					assert(globalCommands[cmd], "Source command not found (" .. (name or cmd) .. ").")
+					command = tostring(command)
+					--local cmd = string.match(message.content, "!(%S+)")
+					--cmd = string.lower(tostring(cmd))
+					assert(globalCommands[command], "Source command not found (" .. (name or command) .. ").")
 
-					owner = globalCommands[cmd].author
+					owner = globalCommands[command].author
 				else
 					owner = message.author.id
 					assert(hasPermission(permissions.is_module, message.guild:getMember(owner)), "You cannot use this function (" .. (name or '') .. ").")
@@ -4542,13 +4543,13 @@ commands["lua"] = {
 				ENV.load = function(src, env)
 					return load(src, '', 't', (ENV or env))
 				end
-			else
-				if isTest ~= debugAction.test then
-					local timerNameUserId, limSeconds = (isTest == debugAction.cmd and getOwner(message) or message.author.id)
+			end
+			if isTest ~= debugAction.test then
+				local timerNameUserId, limSeconds = message.author.id--(isTest == debugAction.cmd and getOwner(message) or message.author.id)
+				if not hasAuth then
 					parameters, limSeconds = addRuntimeLimit(parameters, message, timerNameUserId)
-
-					ENV[getTimerName(timerNameUserId)] = os.time() + (limSeconds or runtimeLimitByMember(message.member))
 				end
+				ENV[getTimerName(timerNameUserId)] = os.time() + (limSeconds or runtimeLimitByMember(message.member))
 			end
 
 			ENV.discord.getData = function(userId)
@@ -4582,7 +4583,7 @@ commands["lua"] = {
 				getOwner(message, "getAllMembers")
 
 				local names, index = { }, 0
-				channel.guild.members:findAll(function(member)
+				message.guild.members:findAll(function(member)
 					if f(member.id) then
 						index = index + 1
 						names[index] = member.id
@@ -6462,7 +6463,7 @@ client:on("ready", function()
 	log("INFO", "Running as '" .. client.user.name .. "'", logColor.green)
 end)
 
-local globalCommandCall = function(cmd, message, parameters)
+local globalCommandCall = function(cmd, message, parameters, command)
 	if cmd.category then
 		if cmd.category ~= (message.channel.category and message.channel.category.id or nil) then
 			toDelete[message.id] = message:reply({
@@ -6502,7 +6503,7 @@ local globalCommandCall = function(cmd, message, parameters)
 
 	local msgs
 	if cmd.script then
-		msgs = commands["lua"].f(message, "`" .. cmd.script .. "`", nil, debugAction.cmd, { parameters = parameters })
+		msgs = commands["lua"].f(message, "`" .. cmd.script .. "`", nil, debugAction.cmd, { parameters = parameters }, command)
 	end
 
 	if msgs then
@@ -6641,7 +6642,7 @@ messageCreate = function(message, skipChannelActivity)
 			throwError(message, { "Command [" .. string.upper(command) .. "]" }, cmd.f, message, parameters, category)
 		else
 			addServerActivity(false)
-			throwError(message, { "Global Command [" .. string.upper(command) .. "]" }, globalCommandCall, cmd, message, parameters)
+			throwError(message, { "Global Command [" .. string.upper(command) .. "]" }, globalCommandCall, cmd, message, parameters, command)
 		end
 	end
 end
