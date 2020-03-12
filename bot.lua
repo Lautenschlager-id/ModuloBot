@@ -1586,7 +1586,7 @@ local hasPermission = function(permission, member, message)
 		local module = message.channel.category and string.lower(message.channel.category.name) or nil
 		if not module then return auth end
 
-		local c = (permission == permissions.is_owner and "★ " or "⚙ ")
+		local c = (permission == permissions.is_owner and "★ " or "[★⚙]+ ")
 
 		return not not member.roles:find(function(role)
 			return string.find(string.lower(role.name), "^" .. c .. module .. "$")
