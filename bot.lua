@@ -1545,17 +1545,17 @@ local hasPermission = function(permission, member, message)
 	if permission == permissions.public then
 		return true
 	elseif permission == permissions.has_power then
-		local highest, len = getRoleOrder(member)
+		local memberRoles, len = getRoleOrder(member)
 		if len == 0 then
-			highest = { member.guild.defaultRole }
-			len = 1
+			return false
 		end
 
-		if highest[len].id == MOD_ROLE.id then
-			len = len - 1
+		for i = 1, len do
+			if roles[memberRoles[i].id] then
+				return true
+			end
 		end
-		highest = highest[len].id
-		return not not (specialRoleColor(highest) or roles[highest])
+		return false
 	elseif permission == permissions.is_module then
 		return member:hasRole(roles["module member"])
 	elseif permission == permissions.is_dev then
@@ -1731,7 +1731,7 @@ do
 		for s = 1, 2 do
 			local f = (s == 1 and string.lower or string.upper)
 			for letter, repl in next, letters do
-				str = string.gsub(str, "[" .. f(repl) .. "]", f(letter))
+				str = string.gsub(str, "[" .. f(repl) .. "]+", f(letter))
 			end
 		end
 		return str
@@ -2078,7 +2078,7 @@ local addRuntimeLimit = function(parameters, message, timerNameUserId)
 	end
 
 	local hasChanged, change = false
-	for _, pattern in next, { "()(while.-do[\n\r ]+)", "()(repeat[\n\r ]+)", "()(for .-=.- do[\n\r ]+)", "()(for .- in .- do[\n\r ]+)", "()(function[\n\r ]*%S-[\n\r ]-%(.-%)[\n\r ]+)" } do
+	for _, pattern in next, { "()(%f[%w%p]while.-do[\n\r ]+)", "()(%f[%w%p]repeat[\n\r ]+)", "()(%f[%w%p]for .-=.- do[\n\r ]+)", "()(%f[%w%p]for .- in .- do[\n\r ]+)", "()(%f[%w%p]function[\n\r ]*%S-[\n\r ]-%(.-%)[\n\r ]+)" } do
 		parameters, change = string.gsub(parameters, pattern, function(pos, chunk)
 			for i = 1, #loads do
 				if (loads[i][1] < pos and loads[i][2] > pos) then
@@ -3159,20 +3159,6 @@ commands["profile"] = {
 			return sendError(message, "PROFILE", "User '" .. parameters .. "' not found.", "Use `!profile member_name/@member`")
 		end
 
-		local role, len = getRoleOrder(member)
-		if len == 0 then
-			role = { member.guild.defaultRole }
-			len = 1
-		end
-		if role[len].id == MOD_ROLE.id then
-			len = len - 1
-		end
-		role = role[len]
-
-		if specialRoleColor(role.id) then
-			role = message.guild:getRole(specialRoleColor(role.id))
-		end
-
 		local fields = { }
 
 		local icon = " "
@@ -3327,7 +3313,7 @@ commands["profile"] = {
 			}
 		end
 
-		if not not activeMembers[p.discord.id] then
+		if activeMembers[p.discord.id] then
 			local cachedMembers, loggedMemberMessages = sortActivityTable(activeMembers, function(id) return not message.guild:getMember(id) end)
 			local _, o = table.find(cachedMembers, p.discord.id, 1)
 
@@ -3340,9 +3326,20 @@ commands["profile"] = {
 			end
 		end
 
+		local memberRoles, len = getRoleOrder(member)
+
+		local roleColor = member.guild.defaultRole.color
+		if len > 0 then
+			for i = 1, len do
+				if memberRoles[i].color > 0 then
+					roleColor = memberRoles[i].color
+				end
+			end
+		end
+
 		toDelete[message.id] = message:reply({
 			embed = {
-				color = (role.color > 0 and role.color or color.sys),
+				color = (roleColor > 0 and roleColor or color.sys),
 
 				thumbnail = { url = p.discord.avatarURL },
 
@@ -5031,42 +5028,55 @@ commands["emoji"] = {
 	auth = permissions.is_module,
 	description = "Creates an emoji in the server.",
 	f = function(message, parameters)
-		if parameters and #parameters > 0 then
-			parameters = string.lower(parameters)
+		local invalid
+		if not parameters or #parameters < 3 then
+			invalid = true
+		end
 
-			local image = message.attachment and message.attachment.url or nil
-			if image then
-				local head, body = http.request("GET", image)
+		local emojiName, url
+		if not invalid then
+			emojiName, url = string.match(parameters, "^([%w_]+)[\n ]*(%S*)")
+			if not emojiName then
+				invalid = true
+			end
+		end
 
-				if body then
-					image = "data:image/png;base64," .. binBase64.encode(body)
+		if invalid then
+			sendError(message, "EMOJI", "Invalid or missing parameters.", "Use `!emoji name` attached to an image or `!emoji name url`.")
+			return
+		end
+		emojiName = string.lower(emojiName)
 
-					local emoji = message.guild:createEmoji(parameters, image)
-					if emoji then
-						message:reply({
-							embed = {
-								color = color.interaction,
-								title = "New Emoji!",
-								description = "Emoji **:" .. parameters .. ":** added successfully",
-								image = {
-									url = emoji.url
-								},
-								footer = { text = "By " .. message.member.name }
-							}
-						})
+		local image = ((url and url ~= '') and url or (message.attachment and message.attachment.url))
+		if image then
+			local head, body = http.request("GET", image)
 
-						message:delete()
-					else
-						sendError(message, "EMOJI", "Internal error.", "Try again later.")
-					end
+			if body then
+				image = "data:image/png;base64," .. binBase64.encode(body)
+
+				local emoji = message.guild:createEmoji(emojiName, image)
+				if emoji then
+					message:reply({
+						embed = {
+							color = color.interaction,
+							title = "New Emoji!",
+							description = "Emoji **:" .. emojiName .. ":** added successfully",
+							image = {
+								url = emoji.url
+							},
+							footer = { text = "By " .. message.member.name }
+						}
+					})
+
+					message:delete()
 				else
-					sendError(message, "EMOJI", "Invalid image or internal error.", "Try again later.")
+					sendError(message, "EMOJI", "Internal error.", "Try again later.")
 				end
 			else
-				sendError(message, "EMOJI", "Invalid or missing image attachment.")
+				sendError(message, "EMOJI", "Invalid image or internal error.", "Try again later.")
 			end
 		else
-			sendError(message, "EMOJI", "Invalid or missing parameters.", "Use `!emoji name` attached to an image.")
+			sendError(message, "EMOJI", "Invalid or missing image attachment.")
 		end
 	end
 }
