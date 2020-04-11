@@ -22,7 +22,7 @@ local ImageMethods = meta.__index
 	>Image
 ]]
 imageHandler.fromUrl = function(url)
-	local path = os.tmpname() .. (string.find(url, ".jpe?g") and ".jpg" or ".png")
+	local path = os.tmpname() .. (string.find(url, "%.jpe?g") and ".jpg" or ".png")
 	local img = { _path = path, _flags = { } }
 
 	os.execute(string.format("curl -s %q -o %s", url, path))

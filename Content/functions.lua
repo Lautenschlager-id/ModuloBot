@@ -117,7 +117,7 @@ table.map = function(list, f)
 	local out = {}
 	
 	for k, v in next, list do
-		out[k] = f(v)
+		out[k] = f(v, k)
 	end
 	
 	return out
@@ -155,27 +155,39 @@ end
 	@list table
 	>string
 ]]
-table.tostring = function(list, depth, stop)
-	depth = depth or 1
+table.tostring = function(tbl, indent, numIndex, stop, _depth, _ref)
+	if type(tbl) ~= "table" then
+		return tostring(tbl)
+	end
+
+	if _depth and _depth > 1 and _ref == tbl then
+		return tostring(_ref)
+	end
+
+	_depth = _depth or 1
 	stop = stop or 0
 
-	local out = {}
-	
-	for k, v in next, list do
-		out[#out + 1] = string.rep("\t", depth) .. ("["..(type(k) == "number" and k or "'" .. k .. "'").."]") .. "="
-		local t = type(v)
-		if t == "table" then
-			out[#out] = out[#out] .. ((stop > 0 and depth > stop) and tostring(v) or table.tostring(v, depth + 1, stop - 1))
+	local out = { }
+	local counter = 0
+
+	local t
+	for k, v in next, tbl do
+		counter = counter + 1
+		out[counter] = (indent and string.rep("\t", _depth) or '') .. ((type(k) ~= "number" and (string.find(k, "^[%w_]") and (k .. " = ") or ("[" .. string.format("%q", k) .. "] = ")) or numIndex and ("[" .. k .. "] = ") or ''))
+
+		t = type(v)
+		if t == "table" and not (stop > 0 and _depth >= stop) then
+			out[counter] = out[counter] .. table.tostring(v, indent, numIndex, stop - 1, _depth + 1, (_ref or tbl))
 		elseif t == "number" or t == "boolean" then
-			out[#out] = out[#out] .. tostring(v)
+			out[counter] = out[counter] .. tostring(v)
 		elseif t == "string" then
-			out[#out] = out[#out] .. string.format("%q", v)
+			out[counter] = out[counter] .. string.format("%q", v)
 		else
-			out[#out] = out[#out] .. "nil"
+			out[counter] = out[counter] .. "type_" .. t
 		end
 	end
-	
-	return "{\r\n" .. table.concat(out, ",\r\n") .. "\r\n" .. string.rep("\t", depth - 1) .. "}"
+
+	return "{" .. (indent and ("\n" .. table.concat(out, ",\n") .. "\n") or table.concat(out, ',')) .. (indent and string.rep("\t", _depth - 1) or '') .. "}"
 end
 
 table.createSet = function(list)
