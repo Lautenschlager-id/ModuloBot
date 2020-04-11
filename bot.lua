@@ -670,6 +670,8 @@ do
 					circle = 13,
 					invisible = 14,
 					web = 15,
+					halloweenGrass = 17,
+					valentinesGrass = 18,
 				},
 				particle = {
 					whiteGlitter = 0,
@@ -973,7 +975,6 @@ local currentAvatar
 local botAvatars = { }
 
 local MOD_ROLE = "585148219395276801"
-local MYCITY_INVITE_OBJECT
 
 --[[ System ]]--
 --[[Doc
@@ -1006,6 +1007,27 @@ local devRestrictions = { "_G", "getfenv", "setfenv" }
 	!table
 ]]
 local moduleRestrictions = { "debug", "dofile", "io", "load", "loadfile", "loadstring", "jit", "module", "p", "package", "process", "require", "os" }
+
+local specialInvites =  {
+	mycity = {
+		code = "QPyBwUh",
+		uses = 0,
+		icon = " :house:",
+		callback = function(member)
+			member:addRole("465523096380506113") -- #mycity role
+		end
+	},
+	transfromage = {
+		code = "qmdryEB",
+		uses = 0,
+		icon = " <:p6:563096586394140682>",
+		callback = function(member)
+			channelReactionBehavior["priv-channels"].f_Add({
+				content = "<#531108640208191508> `(0x400,0x840)` <#545284327362002944> `(0x400,0)` → TransFromage API 🧀"
+			}, nil, nil, nil, member)
+		end
+	}
+}
 
 --[[Doc
 	"Global metamethods used in many parts of the system.
@@ -1522,11 +1544,11 @@ local getRoleOrder = function(member)
 	return roles, #roles
 end
 
-local getMycityInviteObject = function()
+local getInviteUses = function(i)
 	local invites = { }
 	for invite in client:getGuild(channels["guild"]):getInvites():iter() do
-		if invite.code == "QPyBwUh" then
-			return invite
+		if invite.code == i then
+			return invite.uses
 		end
 	end
 end
@@ -3357,8 +3379,12 @@ commands["quote"] = {
 	description = "Quotes an old message.",
 	f = function(message, parameters)
 		if parameters and #parameters > 0 then
-			local quotedChannel, quotedMessage = string.match(parameters, "<?#?(%d+)>? *%-(%d+)")
-			quotedMessage = quotedMessage or string.match(parameters, "%d+")
+			local quotedChannel, quotedMessage
+			quotedChannel, quotedMessage = string.match(parameters, "^https://discordapp.com/channels/%d+/(%d+)/(%d+)$")
+			if not quotedChannel then
+				quotedChannel, quotedMessage = string.match(parameters, "<?#?(%d+)>? *%-(%d+)")
+				quotedMessage = quotedMessage or string.match(parameters, "%d+")
+			end
 
 			if quotedMessage then
 				local msg = client:getChannel(quotedChannel or message.channel)
@@ -4173,7 +4199,7 @@ commands["resign"] = {
 		role = role and message.guild:getRole(role.id)
 
 		if not role then
-			return sendError(message, "RESIGN", "Role not found.", "Report it to <@285878295759814656>")
+			return sendError(message, "RESIGN", "Role not found.", "Report it to <@" .. client.owner.id .. ">")
 		end
 
 		if not parameters:hasRole(role.id) then
@@ -4915,7 +4941,7 @@ commands["public"] = {
 						}
 					})
 				else
-					sendError(message, "PUBLIC", "Something went wrong during the public message edition. Contact Bolodefchoco [Lautenschlager#2555].")
+					sendError(message, "PUBLIC", "Something went wrong during the public message edition. Contact <@" .. client.owner.id .. ">.")
 				end
 			end
 
@@ -5408,6 +5434,18 @@ commands["set"] = {
 		end
 	end
 }
+commands["here"] = {
+	auth = permissions.is_mod,
+	description = "Pings @here.",
+	f = function(message, parameters)
+		if not parameters or #parameters < 1 then
+			return sendError(message, "HERE", "Invalid or missing parameters.", "Use `!here message`.")
+		end
+
+		message:reply("@here\n<@" .. message.author.id .. "> says... " .. tostring(parameters))
+		message:delete()
+	end
+}
 	-- Freeaccess
 commands["commu"] = {
 	description = "Creates a new community role.",
@@ -5498,38 +5536,6 @@ commands["exit"] = {
 		message:delete()
 		log("INFO", "Disconnected from '" .. client.user.name .. "'", logColor.red)
 		os.exit()
-	end
-}
-commands["ping"] = {
-	description = "Lets a role be pingable or not.",
-	f = function(message, parameters)
-		local syntax = "Use `!ping role_name/role_id`"
-
-		if parameters and #parameters > 0 then
-			local index = (tonumber(parameters) and "id" or "name")
-			parameters = string.lower(parameters)
-
-			for role in message.guild.roles:iter() do
-				if string.lower(role[index]) == parameters then
-					parameters = role
-					break
-				end
-			end
-
-			if type(parameters) ~= "table" then
-				return sendError(message, "PING", "Role '" .. tostring(parameters) .. "' not found.", syntax)
-			end
-
-			message.channel:broadcastTyping()
-			if parameters.mentionable then
-				parameters:disableMentioning()
-			else
-				parameters:enableMentioning()
-			end
-			message:delete()
-		else
-			sendError(message, "PING", "Invalid or missing parameters.", syntax)
-		end
 	end
 }
 commands["refresh"] = {
@@ -6176,8 +6182,8 @@ channelReactionBehavior["role-color"] = {
 	end
 }
 channelReactionBehavior["priv-channels"] = {
-	f_Add = function(message, _, _, userId)
-		local member = message.guild:getMember(userId)
+	f_Add = function(message, _, _, userId, _member)
+		local member = _member or message.guild:getMember(userId)
 
 		local channel
 		for id, allowed, denied in string.gmatch(message.content, "<#(%d+)> +`%((.-),(.-)%)`") do
@@ -6342,7 +6348,10 @@ client:on("ready", function()
 	end
 
 	MOD_ROLE = client:getGuild(channels["guild"]):getRole(MOD_ROLE)
-	MYCITY_INVITE_OBJECT = getMycityInviteObject()
+
+	for k, v in next, specialInvites do
+		v.uses = getInviteUses(v.code)
+	end
 
 	-- Imageshack
 	--if not io.popen("convert"):read() then
@@ -6415,6 +6424,7 @@ client:on("ready", function()
 			sendError = sendError,
 			serverActivity = serverActivity,
 			setPermissions = setPermissions,
+			specialInvites = specialInvites,
 
 			throwError = throwError,
 			timeNames = timeNames,
@@ -6734,30 +6744,45 @@ client:on("messageDelete", function(message)
 end)
 
 local memberJoin = function(member)
+	if (os.time() - member.createdAt) < (60 * 60 * 24 * 15) then
+		member:kick()
+		return
+	end
+
 	local isBot = member.bot
-	local isMycity = false
+	local inviteIcon = ''
+
 	if isBot then
 		local code_test = client:getChannel(channels["code-test"])
 		local devPerms = code_test:getPermissionOverwriteFor(code_test.guild:getRole(roles["developer"]))
 		code_test:getPermissionOverwriteFor(member):setPermissions(devPerms.allowedPermissions, devPerms.deniedPermissions)
 		client:getChannel("472958910475665409"):send(":robot: beep boop")
+		inviteIcon = " :robot:"
 	else
-		local invite = getMycityInviteObject()
-		if MYCITY_INVITE_OBJECT.uses ~= invite.uses then -- used mycity's invite link
-			MYCITY_INVITE_OBJECT = invite
-
-			member:addRole("465523096380506113") -- #mycity role
-			isMycity = true
+		local uses
+		for name, invite in next, specialInvites do
+			uses = getInviteUses(invite.code)
+			if invite.uses ~= uses then
+				invite.uses = uses
+				if invite.callback then
+					invite.callback(member)
+				end
+				inviteIcon = invite.icon
+				break
+			end
 		end
 	end
-	client:getChannel(channels["logs"]):send("<@!" .. member.id .. "> [" .. member.name .. "] just joined!" .. (isBot and " :robot:" or isMycity and " :house:" or ''))
-	if not isMycity and not isBot then
+	client:getChannel(channels["logs"]):send("<@!" .. member.id .. "> [" .. member.name .. "] just joined!" .. inviteIcon)
+	--if inviteIcon == '' then
 		--client:getChannel("472958910475665409"):send(string.format(client:getChannel(channels["greetings"]):getMessages(100):random().content, "<@" .. member.id .. ">"))
-	end
+	--end
 	addServerActivity(1)
 end
 local memberLeave = function(member)
-	client:getChannel(channels["logs"]):send("<@" .. member.id .. "> [" .. member.name .. "] just left!\nRoles: " .. tostring(concat(member.roles:toArray(), ", ", function(_, role) return "<@&" .. role.id .. ">" end)))
+	client:getChannel(channels["logs"]):send({
+		content = "<@" .. member.id .. "> [" .. member.name .. "] just left!\nRoles: " .. tostring(concat(member.roles:toArray(), ", ", function(_, role) return "<@&" .. role.id .. ">" end)),
+		allowed_mentions = { parse = { "users" } }
+	})
 
 	if activeMembers[member.id] then
 		activeMembers[member.id] = nil
