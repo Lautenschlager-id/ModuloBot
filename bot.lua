@@ -780,6 +780,7 @@ do
 				disableWatchCommand = emptyFunction,
 				displayParticle = emptyFunction,
 				explosion = emptyFunction,
+				freezePlayer = emptyFunction,
 				giveCheese = emptyFunction,
 				giveConsumables = emptyFunction,
 				giveMeep = emptyFunction,
@@ -961,7 +962,7 @@ local tokens = {
 	imgur = os.readFile("Content/imgur_token.txt", "*l")
 }
 local token_whitelist = {
-	discdb = "http://discbotdb%.000webhostapp%.com",
+	discdb = "http://discorddb%.000webhostapp%.com",
 	fixer = "http://data%.fixer%.io/",
 	mashape = "https://.-%.p%.mashape%.com",
 	openweather = "http://api%.openweathermap%.org/",
@@ -1471,12 +1472,12 @@ end
 	>table|string
 ]]
 local getDatabase = function(fileName, raw, decodeBase64)
-	local head, body = http.request("GET", "http://discbotdb.000webhostapp.com/get?k=" .. tokens.discdb .. "&f=" .. fileName)
-	body = string.gsub(body, "%(%(12%)%)", '+')
+	local head, body = http.request("GET", "http://discorddb.000webhostapp.com/get?k=" .. tokens.discdb .. "&e=json&f=" .. fileName)
+	--body = string.gsub(body, "%(%(12%)%)", '+')
 
-	if decodeBase64 then
-		body = base64.decode(body)
-	end
+	--if decodeBase64 then
+	--	body = base64.decode(body)
+	--end
 	local out = (raw and body or json.decode(body))
 
 	if not body or not out then
@@ -1769,23 +1770,23 @@ end
 ]]
 local save = function(fileName, db, raw, encodeBase64)
 	db = (raw and tostring(db) or json.encode(db))
-	if encodeBase64 then
-		db = base64.encode(db)
-	end
-	db = string.gsub(db, "%+", "((12))")
+	--if encodeBase64 then
+	--	db = base64.encode(db)
+	--end
+	--db = string.gsub(db, "%+", "((12))")
 
-	local head, body = http.request("POST", "http://discbotdb.000webhostapp.com/set?k=" .. tokens.discdb .. "&f=" .. fileName, {
+	local head, body = http.request("POST", "http://discorddb.000webhostapp.com/set?k=" .. tokens.discdb .. "&e=json&f=" .. fileName, nil--[[{
 		{ "Content-Type", "application/x-www-form-urlencoded" }
-	}, db)
+	}]], db)
 
 	return body == "true"
 end
 
 local saveGlobalCommands = function()
-	local toJson = base64.encode(json.encode(globalCommands))
-	local _1 = save("b_gcommands", string.sub(toJson, 1, 70000), true)
-	local _2 = save("b_gcommands_2", string.sub(toJson, 70001), true)
-	return _1, _2
+	--local toJson = base64.encode(json.encode(globalCommands))
+	local _1 = save("serverGlobalCommands", globalCommands)
+	--local _2 = save("serverGlobalCommands_2", string.sub(toJson, 70001), true)
+	return _1--, _2
 end
 --[[Doc
 	~
@@ -1902,7 +1903,7 @@ do
 			for _ = 1, rate do
 				f = fList[i]
 
-				t = os.clock()
+				t = clock()
 				f()
 				t = clock() - t
 
@@ -4258,7 +4259,7 @@ commands["cmd"] = {
 
 						modules[category].commands[command] = cmd
 
-						save("b_modules", modules, false, true)
+						save("serverModulesData", modules, false, true)
 
 						message:reply({
 							embed = {
@@ -4580,7 +4581,7 @@ commands["lua"] = {
 
 				local owner = getOwner(message, "getData")
 
-				return ((cmdData[owner] and cmdData[owner][userId]) and base64.decode(cmdData[owner][userId]) or '')
+				return (cmdData[owner] and cmdData[owner][userId] or '')
 			end
 
 			ENV.discord.saveData = function(userId, data)
@@ -4595,7 +4596,7 @@ commands["lua"] = {
 				if not cmdData[owner] then
 					cmdData[owner] = { }
 				end
-				cmdData[owner][userId] = (data ~= '' and base64.encode(data) or nil)
+				cmdData[owner][userId] = (data ~= '' and data or nil)
 				return true
 			end
 
@@ -4808,7 +4809,7 @@ commands["delcmd"] = {
 				if modules[category].commands[command] then
 					modules[category].commands[command] = nil
 
-					save("b_modules", modules, false, true)
+					save("serverModulesData", modules, false, true)
 
 					message:reply({
 						embed = {
@@ -4839,7 +4840,7 @@ commands["prefix"] = {
 		if parameters and #parameters > 0 and #parameters < 3 then
 			modules[category].prefix = (parameters):gsub("[%(%)%.%%%+%-%*%?%[%]%^%$]", "%%%0")
 
-			save("b_modules", modules, false, true)
+			save("serverModulesData", modules, false, true)
 
 			message:reply({
 				embed = {
@@ -4898,7 +4899,7 @@ commands["public"] = {
 
 				modules[category].hasPublicChannel = true
 
-				save("b_modules", modules, false, true)
+				save("serverModulesData", modules, false, true)
 
 				message:reply({
 					embed = {
@@ -5307,7 +5308,7 @@ commands["module"] = {
 
 						modules[module] = { commands = { } }
 
-						save("b_modules", modules, false, true)
+						save("serverModulesData", modules, false, true)
 
 						message:reply({
 							embed = {
@@ -5524,14 +5525,14 @@ commands["del"] = {
 commands["exit"] = {
 	description = "Ends the bot process.",
 	f = function(message)
-		save("b_modules", modules, false, true)
+		save("serverModulesData", modules, false, true)
 
 		saveGlobalCommands()
 
-		save("b_activechannels", activeChannels)
-		save("b_activemembers", activeMembers)
-		save("b_cmddata", cmdData)
-		save("b_serveractivity", serverActivity)
+		save("serverActiveChannels", activeChannels)
+		save("serverActiveMembers", activeMembers)
+		save("serverCommandsData", cmdData)
+		save("serverActivity", serverActivity)
 
 		message:delete()
 		log("INFO", "Disconnected from '" .. client.user.name .. "'", logColor.red)
@@ -5542,19 +5543,19 @@ commands["refresh"] = {
 	description = "Refreshes the bot.",
 	f = function(message)
 		if table.count(activeChannels) > 0 then
-			save("b_activechannels", activeChannels)
+			save("serverActiveChannels", activeChannels)
 		end
 		if table.count(activeMembers) > 0 then
-			save("b_activemembers", activeMembers)
+			save("serverActiveMembers", activeMembers)
 		end
 		if table.count(memberProfiles) > 0 then
-			save("b_memberprofiles", memberProfiles)
+			save("serverMemberProfiles", memberProfiles)
 		end
 		if table.count(cmdData) > 0 then
-			save("b_cmddata", cmdData)
+			save("serverCommandsData", cmdData)
 		end
 		if table.count(serverActivity) > 0 then
-			save("b_serveractivity", serverActivity)
+			save("serverActivity", serverActivity)
 		end
 
 		message:delete()
@@ -5616,7 +5617,7 @@ commands["remmodule"] = {
 					end
 
 					modules[parameters] = nil
-					save("b_modules", modules, false, true)
+					save("serverModulesData", modules, false, true)
 
 					message:reply({
 						embed = {
@@ -5648,8 +5649,8 @@ commands["resetactivity"] = {
 		client:getChannel(channels["top-activity"]):send(content)
 
 		activeChannels, activeMembers = { }, { }
-		save("b_activechannels", activeChannels)
-		save("b_activemembers", activeMembers)
+		save("serverActiveChannels", activeChannels)
+		save("serverActiveMembers", activeMembers)
 
 		message:delete()
 	end
@@ -6329,13 +6330,13 @@ end
 
 --[[ Events ]]--
 client:on("ready", function()
-	modules = getDatabase("b_modules", false, true)
-	globalCommands = json.decode(base64.decode(getDatabase("b_gcommands", true) .. getDatabase("b_gcommands_2", true)))
-	activeChannels = getDatabase("b_activechannels")
-	activeMembers = getDatabase("b_activemembers")
-	memberProfiles = getDatabase("b_memberprofiles")
-	cmdData = getDatabase("b_cmddata")
-	serverActivity = getDatabase("b_serveractivity")
+	modules = getDatabase("serverModulesData", false, true)
+	globalCommands = getDatabase("serverGlobalCommands")--json.decode(base64.decode(getDatabase("serverGlobalCommands", true) .. getDatabase("serverGlobalCommands_2", true)))
+	activeChannels = getDatabase("serverActiveChannels")
+	activeMembers = getDatabase("serverActiveMembers")
+	memberProfiles = getDatabase("serverMemberProfiles")
+	cmdData = getDatabase("serverCommandsData")
+	serverActivity = getDatabase("serverActivity")
 	-- Normalize string indexes ^
 	for k, v in next, table.copy(memberProfiles) do
 		for i, j in next, v do
@@ -6744,11 +6745,6 @@ client:on("messageDelete", function(message)
 end)
 
 local memberJoin = function(member)
-	if (os.time() - member.createdAt) < (60 * 60 * 24 * 15) then
-		member:kick()
-		return
-	end
-
 	local isBot = member.bot
 	local inviteIcon = ''
 
@@ -6773,9 +6769,16 @@ local memberJoin = function(member)
 		end
 	end
 	client:getChannel(channels["logs"]):send("<@!" .. member.id .. "> [" .. member.name .. "] just joined!" .. inviteIcon)
+
+	if (os.time() - member.createdAt) < (60 * 60 * 24 * 15) then
+		member:send("Hello, " .. member.user.fullname .. ".\n\nAccounts that have been created recently, such as alts, spy or that simply are new to Discord will not be tolerated in our server. Please, try joining at a later time.\n\nAu Revoir! <:tig:511652017819746345>")
+		member:ban('', 1)
+		return
+	end
 	--if inviteIcon == '' then
 		--client:getChannel("472958910475665409"):send(string.format(client:getChannel(channels["greetings"]):getMessages(100):random().content, "<@" .. member.id .. ">"))
 	--end
+
 	addServerActivity(1)
 end
 local memberLeave = function(member)
@@ -7004,11 +7007,11 @@ local clockMin = function()
 	end
 
 	if minutes % 5 == 0 then
-		save("b_activechannels", activeChannels)
-		save("b_activemembers", activeMembers)
-		save("b_memberprofiles", memberProfiles)
-		save("b_cmddata", cmdData)
-		save("b_serveractivity", serverActivity)
+		save("serverActiveChannels", activeChannels)
+		save("serverActiveMembers", activeMembers)
+		save("serverMemberProfiles", memberProfiles)
+		save("serverCommandsData", cmdData)
+		save("serverActivity", serverActivity)
 	end
 
 	for k, v in next, table.deepcopy(polls) do
