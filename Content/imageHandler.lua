@@ -1,6 +1,6 @@
 local imageHandler = {
 	methodFlags = {
-	
+
 	}
 }
 local meta = {
@@ -48,7 +48,7 @@ end
 addMethod("hflip", "-flop")
 addMethod("negative", "-negate")
 addMethod("resize", "-resize", true)
-addMethod("rotate", "-rotate", true)
+addMethod("rotate", "-background 'rgba(0,0,0,0)' -rotate", true)
 addMethod("vflip", "-flip")
 
 --[[Doc
