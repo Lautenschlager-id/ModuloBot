@@ -30,8 +30,6 @@ local binBase64 = require("Content/binBase64")
 local imageHandler = require("Content/imageHandler")
 local utf8 = require("Content/utf8")
 
-local miniz = require("miniz")
-
 require("Content/functions")
 
 --[[Doc
@@ -120,7 +118,8 @@ local channels = {
 	["code-test"] = "474253217421721600",
 	["polls"] = "595364384566673413",
 	["role-log"] = "598894097419337755",
-	["greetings"] = "598898246500483072"
+	["greetings"] = "598898246500483072",
+	["breach"] = "718659508980809758"
 }
 
 local botIds = {
@@ -247,9 +246,9 @@ local communities = {
 	["ru"] = "\xF0\x9F\x87\xB7\xF0\x9F\x87\xBA",
 	["sa"] = "\xF0\x9F\x87\xB8\xF0\x9F\x87\xA6",
 	["tr"] = "\xF0\x9F\x87\xB9\xF0\x9F\x87\xB7",
-	["pt"] = "br",
-	["en"] = "gb",
-	["ar"] = "sa",
+	["pt"] = "\xF0\x9F\x87\xA7\xF0\x9F\x87\xB7",
+	["en"] = "\xF0\x9F\x87\xAC\xF0\x9F\x87\xA7",
+	["ar"] = "\xF0\x9F\x87\xB8\xF0\x9F\x87\xA6",
 }
 --[[Doc
 	"Flags for **!lua** behavior, where `test` removes the logs and `cmd` executes for non-developers"
@@ -1030,6 +1029,9 @@ local specialInvites =  {
 	}
 }
 
+local db_teamList
+local db_modules
+
 --[[Doc
 	"Global metamethods used in many parts of the system.
 	1. **__add(tbl, new)** ~> Adds two tables."
@@ -1238,6 +1240,13 @@ do
 				return string.find(x, "^%S+$") and (http.request("GET", "https://www.instagram.com/" .. x .. "/")).reason == "OK"
 			end,
 			description = "The name of your Instagram account."
+		},
+		twt = {
+			type = "string",
+			valid = function(x)
+				return string.find(x, "^%S+$") and (http.request("GET", "https://twitter.com/" .. x)).reason == "OK"
+			end,
+			description = "The name of your Twitter account."
 		},
 	}
 	profileStruct.bday = {
@@ -1471,16 +1480,19 @@ end
 	@raw boolean*
 	>table|string
 ]]
-local getDatabase = function(fileName, raw, decodeBase64)
+local getDatabase = function(fileName, raw, decodeBase64, ignoreDbErr)
 	local head, body = http.request("GET", "http://discorddb.000webhostapp.com/get?k=" .. tokens.discdb .. "&e=json&f=" .. fileName)
 	--body = string.gsub(body, "%(%(12%)%)", '+')
 
 	--if decodeBase64 then
 	--	body = base64.decode(body)
 	--end
-	local out = (raw and body or json.decode(body))
+	local out = body
+	if not raw then
+		out = json.decode(body)
+	end
 
-	if not body or not out then
+	if not ignoreDbErr and not body or not out then
 		error("Database issue -> " .. tostring(fileName))
 	end
 
@@ -1900,6 +1912,7 @@ do
 		local avg, t, f = { }
 		for i = 1, lenF do
 			avg[i] = 0
+			collectgarbage()
 			for _ = 1, rate do
 				f = fList[i]
 
@@ -2122,6 +2135,72 @@ local addRuntimeLimit = function(parameters, message, timerNameUserId)
 	end
 
 	return parameters
+end
+
+local postNewBreaches = function()
+	local breach = client:getChannel(channels["breach"])
+
+	local lastBreaches = { }
+	for msg in breach:getMessages(10):iter() do
+		lastBreaches[msg.embed.thumbnail.url] = true
+	end
+
+	local today = os.date("%Y-%m-%d")
+
+	local head, body = http.request("GET", "https://haveibeenpwned.com/api/v2/breaches")
+	body = json.decode(body)
+
+	local new, j = { }, 0
+	for i = 1, #body do
+		i = body[i]
+
+		if i.AddedDate:sub(1, 10) == today and not lastBreaches[i.LogoPath] then
+			j = j + 1
+			new[j] = i
+		end
+	end
+
+	if j == 0 then return end
+
+	for i = 1, j do
+		i = new[i]
+
+		breach:send({
+		  embed = {
+		    color = 0x962529,
+		    thumbnail = { url = i.LogoPath },
+		    title = "**" .. i.Name .. " HAS BEEN PWNED!**",
+		    description = "**" .. i.Title .. " | " .. i.Domain .. "**\n\nVerified: " .. tostring(i.IsVerified),
+		    fields = {
+		      [1] = {
+		        name = "What has been compromised?",
+		        value = "• " .. table.concat(i.DataClasses, "\n• "),
+		        inline = true
+		      },
+		      [2] = {
+		        name = "Affected accounts",
+		        value = i.PwnCount .. "+",
+		        inline = true
+		      },
+		      [3] = {
+		        name = "Is Sensitive",
+		        value = tostring(i.IsSensitive),
+		        inline = true
+		      },
+		      [4] = {
+		        name = "Happened in",
+		        value = tostring(i.BreachDate),
+		        inline = true
+		      },
+		      [5] = {
+		        name = "Detected in",
+		        value = tostring(i.AddedDate),
+		        inline = true
+		      }
+		    }
+		  }
+		})
+	end
 end
 
 local messageCreate, messageDelete
@@ -3039,8 +3118,6 @@ commands["modules"] = {
 	auth = permissions.public,
 	description = "Lists the current modules available in Transformice. [by name | from community | level 0/1 | #pattern]",
 	f = function(message, parameters)
-		local head, body = http.request("GET", "https://atelier801.com/topic?f=612619&t=933743")
-
 		local search = {
 			a_commu = false, -- alias
 			commu = false,
@@ -3049,7 +3126,7 @@ commands["modules"] = {
 			pattern = false
 		}
 		if parameters then
-			if not validPattern(message, body, parameters) then return end
+			if not validPattern(message, '', parameters) then return end
 
 			string.gsub(string.lower(parameters), "(%S+)[\n ]+(%S+)", function(keyword, value)
 				if keyword then
@@ -3061,7 +3138,7 @@ commands["modules"] = {
 							search.commu = table.search(communities, value) or value
 						end
 					elseif keyword == "by" and not search.commu then
-						if not validPattern(message, body, value) then return end
+						if not validPattern(message, '', value) then return end
 						search.player = value
 					elseif keyword == "level" then
 						search.type = tonumber(value)
@@ -3076,35 +3153,42 @@ commands["modules"] = {
 			if not search.pattern and not filter then
 				search.pattern = parameters
 			end
-			if search.pattern and not validPattern(message, body, search.pattern) then return end
+			if search.pattern and not validPattern(message, '', search.pattern) then return end
 		end
 
 		local list, counter = { }, 0
 
-		string.gsub(body, '<tr><td><img src="https://atelier801%.com/img/pays/(..)%.png" alt="https://atelier801%.com/img/pays/%1%.png" class="inline%-block img%-ext" style="float:;" /></td><td>     </td><td><span .->(#%S+)</span>.-</td><td>     </td><td><span .->(%S+)</span></td><td>     </td><td><span .->(%S+)</span></td> 	</tr>', function(community, module, level, hoster)
-			local check = (not parameters or parameters == '')
-			if not check then
-				check = true
+		local moduleData, moduleCommunity
+		for i = 1, #db_modules do
+			moduleData = db_modules[i]
+			if not moduleData.isPrivate then
+				moduleCommunity = (db_teamList.mt[moduleData.hoster] or "xx")
+				moduleCommunity = string.lower(moduleCommunity)
 
-				if search.commu then
-					check = community == search.commu
+				local check = (not parameters or parameters == '')
+				if not check then
+					check = true
+
+					if search.commu then
+						check = moduleCommunity == search.commu
+					end
+					if search.type then
+						check = check and ((search.type == 0 and not moduleData.isOfficial) or (search.type == 1 and moduleData.isOfficial))
+					end
+					if search.player then
+						check = check and not not string.find(string.lower(moduleData.hoster), search.player)
+					end
+					if search.pattern then
+						check = check and not not string.find(moduleData.name, search.pattern)
+					end
 				end
-				if search.type then
-					check = check and ((search.type == 0 and level == "semi-official") or (search.type == 1 and level == "official"))
-				end
-				if search.player then
-					check = check and not not string.find(string.lower(hoster), search.player)
-				end
-				if search.pattern then
-					check = check and not not string.find(module, search.pattern)
+
+				if check then
+					counter = counter + 1
+					list[counter] = { moduleCommunity, moduleData.name, (moduleData.isOfficial and "official" or "semi-official"), (moduleCommunity == "xx" and '-' or moduleData.hoster) }
 				end
 			end
-
-			if check then
-				counter = counter + 1
-				list[counter] = { community, module, level, normalizeDiscriminator(hoster) }
-			end
-		end)
+		end
 
 		if #list == 0 then
 			toDelete[message.id] = message:reply({
@@ -3112,12 +3196,12 @@ commands["modules"] = {
 				embed = {
 					color = color.err,
 					title = "<:wheel:456198795768889344> Modules",
-					description = "There are no modules " .. (search.commu and ("made by a(n) [:flag_" .. string.lower(search.commu) .. ":] **" .. string.upper(search.commu) .. "** ") or '') .. (search.player and ("made by **" .. search.player .. "** ") or '') .. (search.type and ("that are [" .. (search.type == 0 and "semi-official" or "official") .. "]") or '') .. (search.pattern and (" with the pattern **`" .. tostring(search.pattern) .. "`**.") or ".")
+					description = "There are no modules " .. (search.commu and ("made by [:flag_" .. string.lower(search.commu) .. ":] **" .. string.upper(search.commu) .. "** ") or '') .. (search.player and ("made by **" .. search.player .. "** ") or '') .. (search.type and ("that are [" .. (search.type == 0 and "semi-official" or "official") .. "]") or '') .. (search.pattern and (" with the pattern **`" .. tostring(search.pattern) .. "`**.") or ".")
 				}
 			})
 		else
 			local out = concat(list, "\n", function(index, value)
-				return communities[value[1]] .. " `" .. value[3] .. "` **" .. value[2] .. "** ~> **" .. value[4] .. "**"
+				return (communities[value[1]] or value[1]) .. " `" .. value[3] .. "` **#" .. value[2] .. "** ~> **" .. normalizeDiscriminator(value[4]) .. "**"
 			end)
 
 			local lines, msgs = splitByLine(out), { }
@@ -3318,6 +3402,14 @@ commands["profile"] = {
 			fields[#fields + 1] = {
 				name = "<:insta:605096338140430396> Instagram",
 				value = "[" .. string.gsub(p.data.insta, '_', "\\_") .. "](https://instagram.com/" .. p.data.insta .. "/)",
+				inline = true
+			}
+		end
+
+		if p.data.twt then
+			fields[#fields + 1] = {
+				name = "<:twitter:717130502447956059> Twitter",
+				value = "[" .. string.gsub(p.data.twt, '_', "\\_") .. "](https://twitter.com/" .. p.data.twt .. "/)",
 				inline = true
 			}
 		end
@@ -4217,7 +4309,7 @@ commands["resign"] = {
 				color = role.color,
 				title = "Demotion :(",
 				thumbnail = { url = parameters.user.avatarURL },
-				description = "**" .. parameters.name .. "** is not a(n) `" .. string.upper(role.name) .. "` anymore.",
+				description = "**" .. parameters.name .. "** is not a `" .. string.upper(role.name) .. "` anymore.",
 				footer = { text = "Unset by " .. message.member.name }
 			}
 		}
@@ -4537,6 +4629,8 @@ commands["lua"] = {
 					assert(globalCommands[command], "Source command not found (" .. (name or command) .. ").")
 
 					owner = globalCommands[command].author
+
+					assert(hasPermission(permissions.is_module, message.guild:getMember(owner)), "<@" .. owner .. "> You cannot use this function (" .. (name or '') .. ").")
 				else
 					owner = message.author.id
 					assert(hasPermission(permissions.is_module, message.guild:getMember(owner)), "You cannot use this function (" .. (name or '') .. ").")
@@ -5016,7 +5110,7 @@ commands["staff"] = {
 }
 	-- Module team
 commands["delgcmd"] = {
-	auth = permissions.is_module,
+	auth = permissions.is_dev,
 	description = "Deletes a global command created by you.",
 	f = function(message, parameters, category)
 		local syntax = "Use `!delgcmd command_name`."
@@ -5132,7 +5226,7 @@ commands["galias"] = {
 			end
 			cmd, alias = string.lower(cmd), string.lower(alias)
 
-			if globalCommands[cmd] and not globalCommands[cmd].ref then
+			if globalCommands[cmd] and not globalCommands[cmd].ref and not globalCommands[alias] then
 				globalCommands[alias] = { ref = cmd }
 				toDelete[message.id] = message:reply({
 					embed = {
@@ -5143,15 +5237,15 @@ commands["galias"] = {
 				})
 				saveGlobalCommands()
 			else
-				sendError(message, "GALIAS", "Invalid command.", "The command **" .. cmd .. "** doesn't exist or already is an alias.")
+				sendError(message, "GALIAS", "Invalid command.", "The command **" .. cmd .. "** doesn't exist, already is an alias or can't be overwritten.")
 			end
 		else
-			sendError(message, "GALIAS", "Invalid or missing parameters.", "Use `!alias command alias`")
+			sendError(message, "GALIAS", "Invalid or missing parameters.", "Use `!galias command alias`")
 		end
 	end
 }
 commands["gcmd"] = {
-	auth = permissions.is_module,
+	auth = permissions.is_dev,
 	description = "Creates a command in the global categories.",
 	f = function(message, parameters)
 		local category = message.channel.category and string.lower(message.channel.category.name) or nil
@@ -6328,15 +6422,32 @@ do
 	end
 end
 
+local TRY_REQUEST = function(db, arg1, arg2)
+	local tentatives, content = 0
+	repeat
+		tentatives = tentatives + 1
+		content = getDatabase(db, arg1, arg2, true)
+	until content or tentatives > 10
+
+	if not content then
+		os.execute("luvit bot.lua")
+		error("Database issue -> " .. db)
+	end
+
+	return content
+end
+
 --[[ Events ]]--
 client:on("ready", function()
-	modules = getDatabase("serverModulesData", false, true)
-	globalCommands = getDatabase("serverGlobalCommands")--json.decode(base64.decode(getDatabase("serverGlobalCommands", true) .. getDatabase("serverGlobalCommands_2", true)))
-	activeChannels = getDatabase("serverActiveChannels")
-	activeMembers = getDatabase("serverActiveMembers")
-	memberProfiles = getDatabase("serverMemberProfiles")
-	cmdData = getDatabase("serverCommandsData")
-	serverActivity = getDatabase("serverActivity")
+	modules = TRY_REQUEST("serverModulesData", false, true)
+	globalCommands = TRY_REQUEST("serverGlobalCommands")--json.decode(base64.decode(getDatabase("serverGlobalCommands", true) .. getDatabase("serverGlobalCommands_2", true)))
+	activeChannels = TRY_REQUEST("serverActiveChannels")
+	activeMembers = TRY_REQUEST("serverActiveMembers")
+	memberProfiles = TRY_REQUEST("serverMemberProfiles")
+	cmdData = TRY_REQUEST("serverCommandsData")
+	serverActivity = TRY_REQUEST("serverActivity")
+	db_teamList = TRY_REQUEST("teamList")
+	db_modules = TRY_REQUEST("modules")
 	-- Normalize string indexes ^
 	for k, v in next, table.copy(memberProfiles) do
 		for i, j in next, v do
@@ -6432,7 +6543,12 @@ client:on("ready", function()
 			timer = timer,
 			tokens = tokens,
 
-			updateCurrency = updateCurrency
+			updateCurrency = updateCurrency,
+
+			db_teamList = db_teamList,
+			db_modules = db_modules,
+
+			postNewBreaches = postNewBreaches
 		}, {
 			__index = restricted_G
 		}),
@@ -6459,17 +6575,18 @@ client:on("ready", function()
 	local counter, male, female = 0
 	local _, body = http.request("GET", "http://transformice.com/langues/tfz_en")
 	body = require("miniz").inflate(body, 1) -- Decompress
-	for titleId, titleName in string.gmatch(body, "¤T_(%d+)=([^¤]+)") do
+
+	for titleId, titleName in string.gmatch(body, "\n%-\nT_(%d+)=([^\n]+)") do
 		titleId = tonumber(titleId)
 
 		titleName = string.gsub(titleName, "<.->", '') -- Removes HTML
 		titleName = string.gsub(titleName, "[%*%_~]", "\\%1") -- Escape special characters
 		if string.find(titleName, '|', nil, true) then -- Male / Female
-			-- Male version
-			male = string.gsub(titleName, "%((.-)|.-%)", function(s) return s end)
-			-- Female version
-			female = string.gsub(titleName, "%(.-|(.-)%)", function(s) return s end)
-
+			---- Male version
+			--male = string.gsub(titleName, "%((.-)|.-%)", function(s) return s end)
+			---- Female version
+			--female = string.gsub(titleName, "%(.-|(.-)%)", function(s) return s end)
+			male, female = string.match(titleName, "%(.-)|(.-)%")
 			titleName = { male, female } -- id % 2 + 1
 		end
 		counter = counter + 1
@@ -6772,12 +6889,12 @@ local memberJoin = function(member)
 
 	if (os.time() - member.createdAt) < (60 * 60 * 24 * 15) then
 		member:send("Hello, " .. member.user.fullname .. ".\n\nAccounts that have been created recently, such as alts, spy or that simply are new to Discord will not be tolerated in our server. Please, try joining at a later time.\n\nAu Revoir! <:tig:511652017819746345>")
-		member:ban('', 1)
+		member:kick()
 		return
 	end
-	--if inviteIcon == '' then
-		--client:getChannel("472958910475665409"):send(string.format(client:getChannel(channels["greetings"]):getMessages(100):random().content, "<@" .. member.id .. ">"))
-	--end
+	if inviteIcon == '' then
+		client:getChannel("472958910475665409"):send(string.format(client:getChannel(channels["greetings"]):getMessages(100):random().content, "<@" .. member.id .. ">"))
+	end
 
 	addServerActivity(1)
 end
@@ -7061,6 +7178,10 @@ local clockHour = function()
 		currentAvatar = moon
 		client:setAvatar(botAvatars[currentAvatar])
 	end
+
+	postNewBreaches()
+
+	http.request("GET", "https://discorddb.000webhostapp.com/backup.php?k=" .. tokens.discdb)
 end
 clock:on("hour", function()
 	throwError(nil, "ClockHour", clockHour)
