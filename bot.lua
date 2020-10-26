@@ -2133,7 +2133,8 @@ local addRuntimeLimit = function(parameters, message, timerNameUserId)
 	end
 
 	if hasChanged then
-		local s = runtimeLimitByMember(message.member)
+		local member = message.member or client:getGuild(channels["guild"]):getMember(message.author.id)
+		local s = runtimeLimitByMember(member)
 		parameters = "local " .. func .. " do local t,e,m,ts=os.time,error,\"Your code has exceeded the runtime limit of " .. s .. "s.\",tostring " .. func .. "=function() if t()>" .. getTimerName(timerNameUserId or message.author.id) .. " then e(ts(m),2) end end end " .. parameters
 		return parameters, s
 	end
