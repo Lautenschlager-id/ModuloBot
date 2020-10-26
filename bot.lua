@@ -4506,8 +4506,6 @@ commands["lua"] = {
 				assert((msg.channel.id ~= channels["commu"] and msg.channel.id ~= channels["modules"]), "Message deletion denied.")
 
 				if message.channel.type == 1 then -- dms
-					assert(msg.author.id == client.user.id, "You can only delete Modulo's messages in DMs.")
-
 					msg:delete()
 					return
 				end
@@ -4789,7 +4787,6 @@ commands["lua"] = {
 
 			ENV.discord.sendPrivateMessage = function(content)
 				assert(content, "Content cannot be nil in discord.sendPrivateMessage")
-				assert(message.guild, "Use discord.reply instead of discord.sendPrivateMessage when replying to a DM")
 				if type(content) ~= "table" then
 					content = tostring(content)
 				end
