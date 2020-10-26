@@ -6704,56 +6704,6 @@ messageCreate = function(message, skipChannelActivity)
 	-- Skips bot messages
 	if message.author.bot then return end
 
-	-- Only allow specific global commands to run in DMs
-	if message.channel.type == 1 then
-		-- Detect command and parameters
-		local prefix = "!"
-		local command, parameters = string.match(message.content, "^" .. prefix .. "%s*(%S+)[\n ]+(.*)")
-		command = command or string.match(message.content, "^" .. prefix .. "%s*(%S+)")
-		if not command then return end
-
-		command = string.lower(command)
-		parameters = (parameters and parameters ~= '') and string.trim(parameters) or nil
-
-		-- Function call
-		local botCommand, cmd = true, commands[command]
-		if not cmd then
-			botCommand = false
-			cmd = globalCommands[command] or nil
-		end
-
-		if cmd then
-			if cmd.ref then
-				cmd = globalCommands[cmd.ref]
-			end
-
-			-- if the command doesn't allow to run in dms, don't do anything
-			if not cmd.dm then return end
-
-			local guild = client:getGuild(channels["guild"])
-			local member = guild:getMember(message.author.id)
-
-			if not (authIds[message.author.id] or hasPermission(cmd.auth, member, message)) then
-				toDelete[message.id] = message:reply({
-					embed = {
-						color = color.err,
-						title = "Authorization denied.",
-						description = "You do not have access to the command **" .. command .. "**!"
-					}
-				})
-				return
-			end
-
-			if botCommand then
-				throwError(message, { "Command [" .. string.upper(command) .. "]" }, cmd.f, message, parameters, category)
-			else
-				throwError(message, { "Global Command [" .. string.upper(command) .. "]" }, globalCommandCall, cmd, message, parameters, command)
-			end
-		end
-
-		return
-	end
-
 	-- Channel behavior system (Input)
 	for k, v in next, channelBehavior do
 		if not v.output and channels[k] and message.channel.id == channels[k] then
@@ -6774,6 +6724,8 @@ messageCreate = function(message, skipChannelActivity)
 	command = command or string.match(message.content, "^" .. prefix .. "%s*(%S+)")
 
 	if not command then
+		if message.channel.type == 1 then return end -- dms
+
 		if string.find(message.content, "gZPygkN0kqM") then
 			return message:delete()
 		end
@@ -6833,8 +6785,10 @@ messageCreate = function(message, skipChannelActivity)
 	local botCommand, moduleCommand, cmd = true, false, commands[command]
 	if not cmd then
 		botCommand = false
-		moduleCommand = true
-		cmd = modules[category] and modules[category].commands[command] or nil
+		if category then
+			moduleCommand = true
+			cmd = modules[category] and modules[category].commands[command] or nil
+		end
 		if not cmd then
 			moduleCommand = false
 			cmd = globalCommands[command] or nil
@@ -6846,7 +6800,15 @@ messageCreate = function(message, skipChannelActivity)
 			cmd = globalCommands[cmd.ref]
 		end
 
-		if not (authIds[message.author.id] or hasPermission(cmd.auth, message.member, message)) then
+		if message.channel.type == 1 and not cmd.dm then return end
+
+		local member = message.member
+		if not member then
+			local guild = client:getGuild(channels["guild"])
+			member = guild:getMember(message.author.id)
+		end
+
+		if not (authIds[message.author.id] or hasPermission(cmd.auth, member, message)) then
 			toDelete[message.id] = message:reply({
 				content = "<@!" .. message.author.id .. ">",
 				embed = {
@@ -6858,11 +6820,13 @@ messageCreate = function(message, skipChannelActivity)
 			return
 		end
 
+		if message.channel.type ~= 1 then
+			addServerActivity(not not botCommand)
+		end
+
 		if botCommand then
-			addServerActivity(true)
 			throwError(message, { "Command [" .. string.upper(command) .. "]" }, cmd.f, message, parameters, category)
 		else
-			addServerActivity(false)
 			throwError(message, { "Global Command [" .. string.upper(command) .. "]" }, globalCommandCall, cmd, message, parameters, command)
 		end
 	end
