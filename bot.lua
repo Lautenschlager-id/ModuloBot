@@ -1620,7 +1620,7 @@ local hasPermission = function(permission, member, message)
 	elseif permission == permissions.is_mod then
 		return member:hasRole(MOD_ROLE.id)
 	elseif permission == permissions.is_staff or permission == permissions.is_owner then
-		if not message then return auth end
+		if not message or not message.channel then return auth end
 
 		local module = message.channel.category and string.lower(message.channel.category.name) or nil
 		if not module then return auth end
@@ -4385,6 +4385,7 @@ commands["lua"] = {
 	description = "Loads a Lua code.",
 	f = function(message, parameters, _, isTest, compEnv, command)
 		local syntax = "Use `!lua ```code``` `."
+		local message_author = message.member or message.author
 
 		if parameters and #parameters > 2 then
 			local foo
@@ -4404,6 +4405,7 @@ commands["lua"] = {
 			local dataLines = {}
 			local repliedMessages = {}
 
+			local guild = message.guild or client:getGuild(channels["guild"])
 			local _ENV = getLuaEnv()
 			local ENV = (hasAuth and devENV or moduleENV) + _ENV
 			if compEnv then
@@ -4467,6 +4469,7 @@ commands["lua"] = {
 						name = message.member.name,
 						nickname = message.member.nickname
 					}) or nil,
+					isDM = message.channel.type == 1,
 					mentionsEveryone = message.mentionsEveryone,
 					oldContent = message.oldContent
 				}
@@ -4501,6 +4504,11 @@ commands["lua"] = {
 				assert(msg, "Message not found")
 
 				assert((msg.channel.id ~= channels["commu"] and msg.channel.id ~= channels["modules"]), "Message deletion denied.")
+
+				if message.channel.type == 1 then -- dms
+					msg:delete()
+					return
+				end
 
 				assert((os.time() - (60 * 3)) < discordia.Date.fromISO(msg.timestamp):toSeconds(), "The message cannot be deleted after 5 minutes.")
 
@@ -4635,10 +4643,10 @@ commands["lua"] = {
 
 					owner = globalCommands[command].author
 
-					assert(hasPermission(permissions.is_module, message.guild:getMember(owner)), "<@" .. owner .. "> You cannot use this function (" .. (name or '') .. ").")
+					assert(hasPermission(permissions.is_module, guild:getMember(owner)), "<@" .. owner .. "> You cannot use this function (" .. (name or '') .. ").")
 				else
 					owner = message.author.id
-					assert(hasPermission(permissions.is_module, message.guild:getMember(owner)), "You cannot use this function (" .. (name or '') .. ").")
+					assert(hasPermission(permissions.is_module, guild:getMember(owner)), "You cannot use this function (" .. (name or '') .. ").")
 				end
 				return owner
 			end
@@ -4706,7 +4714,7 @@ commands["lua"] = {
 				getOwner(message, "getAllMembers")
 
 				local names, index = { }, 0
-				message.guild.members:findAll(function(member)
+				guild.members:findAll(function(member)
 					if f(member.id) then
 						index = index + 1
 						names[index] = member.id
@@ -4757,7 +4765,7 @@ commands["lua"] = {
 				assert(memberName, "Member name can't be nil in discord.getMemberId")
 				memberName = tostring(memberName)
 
-				local member = message.guild.members:find(function(m)
+				local member = guild.members:find(function(m)
 					return m.tag == memberName or m.nickname == memberName or m.name == memberName
 				end)
 
@@ -4768,13 +4776,13 @@ commands["lua"] = {
 				assert(memberId, "Member ID can't be nil in discord.getMemberName")
 				memberId = tostring(memberId)
 
-				local member = message.guild:getMember(memberId)
+				local member = guild:getMember(memberId)
 				return member and member.name
 			end
 
 			ENV.discord.isMember = function(userId)
 				assert(userId, "Member id cannot be nil in discord.isMember")
-				return message.guild:getMember(userId) ~= nil
+				return guild:getMember(userId) ~= nil
 			end
 
 			ENV.discord.sendPrivateMessage = function(content)
@@ -4830,7 +4838,7 @@ commands["lua"] = {
 				toDelete[message.id] = message:reply({
 					embed = {
 						color = color.lua_err,
-						title = "[" .. message.member.name .. ".Lua] Error : SyntaxError",
+						title = "[" .. message_author.name .. ".Lua] Error : SyntaxError",
 						description = "```\n" .. syntaxErr .. "```"
 					}
 				})
@@ -4850,7 +4858,7 @@ commands["lua"] = {
 				toDelete[message.id] = message:reply({
 					embed = {
 						color = color.lua_err,
-						title = "[" .. message.member.name .. ".Lua] Error : RuntimeError",
+						title = "[" .. message_author.name .. ".Lua] Error : RuntimeError",
 						description = "```\n" .. tostring(runtimeErr) .. "```"
 					}
 				})
@@ -4863,7 +4871,7 @@ commands["lua"] = {
 					embed = {
 						color = color.sys,
 						footer = {
-							text = "[" .. message.member.name .. ".Lua] Loaded successfully! (Ran in " .. ms .. "ms)"
+							text = "[" .. message_author.name .. ".Lua] Loaded successfully! (Ran in " .. ms .. "ms)"
 						}
 					}
 				})
@@ -4897,7 +4905,7 @@ commands["lua"] = {
 				end
 			end
 		else
-			sendError(message, message.member.name .. ".Lua", "Invalid or missing parameters.", syntax)
+			sendError(message, message_author.name .. ".Lua", "Invalid or missing parameters.", syntax)
 		end
 	end
 }
@@ -5267,11 +5275,11 @@ commands["gcmd"] = {
 			return sendError(message, "GCMD", "This command cannot be used for #modules. Use the command `!cmd` instead.")
 		end
 
-		local syntax = "Use `!gcmd 0|1|2 0|1|2 command_name [ script ``` script ``` ] [ value[[command_content]] ] [ title[[command_title]] ] [ description[[command_description]] ]`.\n\n[Click here to open the command generator](https://fiftysol.github.io/gcmd-generator/)"
+		local syntax = "Use `!gcmd 0|1|2 0|1|2 0|1 command_name [ script ``` script ``` ] [ value[[command_content]] ] [ title[[command_title]] ] [ description[[command_description]] ]`.\n\n[Click here to open the command generator](https://fiftysol.github.io/gcmd-generator/)"
 
 		if parameters and #parameters > 0 then
 			local script, content, title, description = getCommandFormat(parameters)
-			local channelLevel, authLevel, command = string.match(parameters, "^(%d)[\n ]+(%d)[\n ]+([%a][%w_%-]+)[\n ]+")
+			local channelLevel, authLevel, allowDM, command = string.match(parameters, "^(%d)[\n ]+(%d)[\n ]+(%d)[\n ]+([%a][%w_%-]+)[\n ]+")
 
 			if channelLevel then
 				channelLevel = tonumber(channelLevel)
@@ -5279,40 +5287,50 @@ commands["gcmd"] = {
 					if authLevel then
 						authLevel = tonumber(authLevel)
 						if authLevel < 3 then
-							if command and #command > 1 and #command < 21 then
-								command = string.lower(command)
+							if allowDM then
+								allowDM = tonumber(allowDM)
+								if allowDM < 2 then
+									if command and #command > 1 and #command < 21 then
+										command = string.lower(command)
 
-								if commands[command] then
-									return sendError(message, "GCMD", "This command already exists and is not global.")
+										if commands[command] then
+											return sendError(message, "GCMD", "This command already exists and is not global.")
+										end
+										if globalCommands[command] and (globalCommands[command].author ~= message.author.id and not authIds[message.author.id]) then
+											return sendError(message, "GCMD", "This command already exists.", "Ask the owner, <@" .. globalCommands[command].author .. ">, for an edition.")
+										end
+
+										local cmd = getCommandTable(message, script, content, title, description)
+										if type(cmd) == "string" then
+											return sendError(message, "GCMD", cmd)
+										end
+
+										cmd.author = ((globalCommands[command] and globalCommands[command].author) or message.author.id)
+										cmd.auth = (authLevel == 0 and permissions.public or authLevel == 1 and permissions.is_dev or permissions.is_module)
+										cmd.dm = allowDM == 1
+										if channelLevel == 1 then
+											cmd.category = message.channel.category.id
+										elseif channelLevel == 2 then
+											cmd.channel = message.channel.id
+										end
+
+										globalCommands[command] = cmd
+
+										saveGlobalCommands()
+
+										message:reply({
+											embed = {
+												color = color.sys,
+												description = "Command `" .. command .. "` created successfully!",
+												footer = { text = "By " .. message.member.name }
+											}
+										})
+									else
+										sendError(message, "GCMD", "Invalid syntax.", syntax)
+									end
+								else
+									sendError(message, "GCMD", "Invalid level flag.", "The DM authorization level must be 0 (Disallowed) or 1 (Allowed).")
 								end
-								if globalCommands[command] and (globalCommands[command].author ~= message.author.id and not authIds[message.author.id]) then
-									return sendError(message, "GCMD", "This command already exists.", "Ask the owner, <@" .. globalCommands[command].author .. ">, for an edition.")
-								end
-
-								local cmd = getCommandTable(message, script, content, title, description)
-								if type(cmd) == "string" then
-									return sendError(message, "GCMD", cmd)
-								end
-
-								cmd.author = ((globalCommands[command] and globalCommands[command].author) or message.author.id)
-								cmd.auth = (authLevel == 0 and permissions.public or authLevel == 1 and permissions.is_dev or permissions.is_module)
-								if channelLevel == 1 then
-									cmd.category = message.channel.category.id
-								elseif channelLevel == 2 then
-									cmd.channel = message.channel.id
-								end
-
-								globalCommands[command] = cmd
-
-								saveGlobalCommands()
-
-								message:reply({
-									embed = {
-										color = color.sys,
-										description = "Command `" .. command .. "` created successfully!",
-										footer = { text = "By " .. message.member.name }
-									}
-								})
 							else
 								sendError(message, "GCMD", "Invalid syntax.", syntax)
 							end
@@ -6618,29 +6636,31 @@ client:on("ready", function()
 end)
 
 local globalCommandCall = function(cmd, message, parameters, command)
-	if cmd.category then
-		if cmd.category ~= (message.channel.category and message.channel.category.id or nil) then
-			toDelete[message.id] = message:reply({
-				content = "<@!" .. message.author.id .. ">",
-				embed = {
-					color = color.err,
-					title = "Authorization denied.",
-					description = "You can't use this command in this category."
-				}
-			})
-			return
-		end
-	elseif cmd.channel then
-		if cmd.channel ~= message.channel.id then
-			toDelete[message.id] = message:reply({
-				content = "<@!" .. message.author.id .. ">",
-				embed = {
-					color = color.err,
-					title = "Authorization denied.",
-					description = "You can't use this command in this channel."
-				}
-			})
-			return
+	if message.channel.type ~= 1 then -- not a DM
+		if cmd.category then
+			if cmd.category ~= (message.channel.category and message.channel.category.id or nil) then
+				toDelete[message.id] = message:reply({
+					content = "<@!" .. message.author.id .. ">",
+					embed = {
+						color = color.err,
+						title = "Authorization denied.",
+						description = "You can't use this command in this category."
+					}
+				})
+				return
+			end
+		elseif cmd.channel then
+			if cmd.channel ~= message.channel.id then
+				toDelete[message.id] = message:reply({
+					content = "<@!" .. message.author.id .. ">",
+					embed = {
+						color = color.err,
+						title = "Authorization denied.",
+						description = "You can't use this command in this channel."
+					}
+				})
+				return
+			end
 		end
 	end
 
@@ -6684,9 +6704,6 @@ messageCreate = function(message, skipChannelActivity)
 	-- Skips bot messages
 	if message.author.bot then return end
 
-	-- Doesn't allow private messages
-	if message.channel.type == 1 then return end
-
 	-- Channel behavior system (Input)
 	for k, v in next, channelBehavior do
 		if not v.output and channels[k] and message.channel.id == channels[k] then
@@ -6707,6 +6724,8 @@ messageCreate = function(message, skipChannelActivity)
 	command = command or string.match(message.content, "^" .. prefix .. "%s*(%S+)")
 
 	if not command then
+		if message.channel.type == 1 then return end -- dms
+
 		if string.find(message.content, "gZPygkN0kqM") then
 			return message:delete()
 		end
@@ -6766,8 +6785,10 @@ messageCreate = function(message, skipChannelActivity)
 	local botCommand, moduleCommand, cmd = true, false, commands[command]
 	if not cmd then
 		botCommand = false
-		moduleCommand = true
-		cmd = modules[category] and modules[category].commands[command] or nil
+		if category then
+			moduleCommand = true
+			cmd = modules[category] and modules[category].commands[command] or nil
+		end
 		if not cmd then
 			moduleCommand = false
 			cmd = globalCommands[command] or nil
@@ -6779,7 +6800,15 @@ messageCreate = function(message, skipChannelActivity)
 			cmd = globalCommands[cmd.ref]
 		end
 
-		if not (authIds[message.author.id] or hasPermission(cmd.auth, message.member, message)) then
+		if message.channel.type == 1 and not cmd.dm then return end
+
+		local member = message.member
+		if not member then
+			local guild = client:getGuild(channels["guild"])
+			member = guild:getMember(message.author.id)
+		end
+
+		if not (authIds[message.author.id] or hasPermission(cmd.auth, member, message)) then
 			toDelete[message.id] = message:reply({
 				content = "<@!" .. message.author.id .. ">",
 				embed = {
@@ -6791,11 +6820,13 @@ messageCreate = function(message, skipChannelActivity)
 			return
 		end
 
+		if message.channel.type ~= 1 then
+			addServerActivity(not not botCommand)
+		end
+
 		if botCommand then
-			addServerActivity(true)
 			throwError(message, { "Command [" .. string.upper(command) .. "]" }, cmd.f, message, parameters, category)
 		else
-			addServerActivity(false)
 			throwError(message, { "Global Command [" .. string.upper(command) .. "]" }, globalCommandCall, cmd, message, parameters, command)
 		end
 	end
