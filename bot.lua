@@ -1553,7 +1553,7 @@ local getRate = function(value, of, max)
 	max = max or 10
 
 	local rate = math.min(max, (value * (max / of)))
-	return string.format("`[%s%s] %.2f%%`", string.rep('|', rate), string.rep(' ', max - rate), math.percent(value, of))
+	return string.format("`[%s%s] %.2f%%`", string.rep('|', rate), string.rep(' ', max - rate), math.percent(value, of))
 end
 
 local getRoleOrder = function(member)
@@ -2133,7 +2133,8 @@ local addRuntimeLimit = function(parameters, message, timerNameUserId)
 	end
 
 	if hasChanged then
-		local s = runtimeLimitByMember(message.member)
+        local member = message.member or client:getGuild(channels["guild"]):getMember(message.author.id)
+        local s = runtimeLimitByMember(member)
 		parameters = "local " .. func .. " do local t,e,m,ts=os.time,error,\"Your code has exceeded the runtime limit of " .. s .. "s.\",tostring " .. func .. "=function() if t()>" .. getTimerName(timerNameUserId or message.author.id) .. " then e(ts(m),2) end end end " .. parameters
 		return parameters, s
 	end
@@ -4680,7 +4681,8 @@ commands["lua"] = {
 				if not hasAuth then
 					parameters, limSeconds = addRuntimeLimit(parameters, message, timerNameUserId)
 				end
-				ENV[getTimerName(timerNameUserId)] = os.time() + (limSeconds or runtimeLimitByMember(message.member))
+
+				ENV[getTimerName(timerNameUserId)] = os.time() + (limSeconds or runtimeLimitByMember(message.member or guild:getMember(message.author.id)))
 			end
 
 			ENV.discord.getData = function(userId)
