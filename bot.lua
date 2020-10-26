@@ -5293,7 +5293,7 @@ commands["gcmd"] = {
 
 			if channelLevel then
 				channelLevel = tonumber(channelLevel)
-				if channelLevel < 4 then
+				if channelLevel < 3 then
 					if authLevel then
 						authLevel = tonumber(authLevel)
 						if authLevel < 3 then
