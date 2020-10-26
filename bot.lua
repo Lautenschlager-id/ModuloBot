@@ -1,4 +1,7 @@
+local db_url = "https://discorddb.000webhostapp.com/" -- "http://fsoldb.rf.gd/"
+
 math.randomseed(os.time())
+local DB_COOKIES_N_BLAME_INFINITYFREE
 
 -- Avoid memory spam
 do
@@ -1363,6 +1366,7 @@ local encodeUrl = function(url)
 
 	return '%' .. table.concat(out, '%')
 end
+
 --[[Doc
 	"Transforms Shaman Experience into Level, also the remaining experience and how many is needed for the next level."
 	@xp string
@@ -1481,7 +1485,7 @@ end
 	>table|string
 ]]
 local getDatabase = function(fileName, raw, decodeBase64, ignoreDbErr)
-	local head, body = http.request("GET", "http://discorddb.000webhostapp.com/get?k=" .. tokens.discdb .. "&e=json&f=" .. fileName)
+	local head, body = http.request("GET", db_url .. "get?k=" .. tokens.discdb .. "&e=json&f=" .. fileName, DB_COOKIES_N_BLAME_INFINITYFREE)
 	--body = string.gsub(body, "%(%(12%)%)", '+')
 
 	--if decodeBase64 then
@@ -1787,7 +1791,7 @@ local save = function(fileName, db, raw, encodeBase64)
 	--end
 	--db = string.gsub(db, "%+", "((12))")
 
-	local head, body = http.request("POST", "http://discorddb.000webhostapp.com/set?k=" .. tokens.discdb .. "&e=json&f=" .. fileName, nil--[[{
+	local head, body = http.request("POST", db_url .. "set?k=" .. tokens.discdb .. "&e=json&f=" .. fileName, DB_COOKIES_N_BLAME_INFINITYFREE--[[{sa
 		{ "Content-Type", "application/x-www-form-urlencoded" }
 	}]], db)
 
@@ -2420,9 +2424,10 @@ commands["adoc"] = {
 								local list, desc = string.match(param, "(.-) ?: (.+)")
 
 								if list then
-									local params = { }
+									local params, counter = { }, 0
 									for name, type in string.gmatch(list, "(%w+) %((.-)%)") do
-										params[#params + 1] = "`" .. type .. "` **" .. name .. "**"
+										counter = counter + 1
+										params[counter] = "`" .. type .. "` **" .. name .. "**"
 									end
 
 									if #params > 0 and desc then
@@ -4759,6 +4764,14 @@ commands["lua"] = {
 				return member and member.id
 			end
 
+			ENV.discord.getMemberName = function(memberId)
+				assert(memberId, "Member ID can't be nil in discord.getMemberName")
+				memberId = tostring(memberId)
+
+				local member = message.guild:getMember(memberId)
+				return member and member.name
+			end
+
 			ENV.discord.isMember = function(userId)
 				assert(userId, "Member id cannot be nil in discord.isMember")
 				return message.guild:getMember(userId) ~= nil
@@ -6548,7 +6561,10 @@ client:on("ready", function()
 			db_teamList = db_teamList,
 			db_modules = db_modules,
 
-			postNewBreaches = postNewBreaches
+			postNewBreaches = postNewBreaches,
+
+			DB_COOKIES_N_BLAME_INFINITYFREE = DB_COOKIES_N_BLAME_INFINITYFREE,
+			db_url = db_url
 		}, {
 			__index = restricted_G
 		}),
@@ -6573,7 +6589,7 @@ client:on("ready", function()
 
 	-- Get title list
 	local counter, male, female = 0
-	local _, body = http.request("GET", "http://transformice.com/langues/tfz_en")
+	local _, body = http.request("GET", "http://transformice.com/langues/tfm-en.gz")
 	body = require("miniz").inflate(body, 1) -- Decompress
 
 	for titleId, titleName in string.gmatch(body, "\n%-\nT_(%d+)=([^\n]+)") do
@@ -6586,7 +6602,7 @@ client:on("ready", function()
 			--male = string.gsub(titleName, "%((.-)|.-%)", function(s) return s end)
 			---- Female version
 			--female = string.gsub(titleName, "%(.-|(.-)%)", function(s) return s end)
-			male, female = string.match(titleName, "%(.-)|(.-)%")
+			male, female = string.match(titleName, "%((.-)|(.-)%)")
 			titleName = { male, female } -- id % 2 + 1
 		end
 		counter = counter + 1
@@ -7181,7 +7197,7 @@ local clockHour = function()
 
 	postNewBreaches()
 
-	http.request("GET", "https://discorddb.000webhostapp.com/backup.php?k=" .. tokens.discdb)
+	http.request("GET", db_url .. "backup.php?k=" .. tokens.discdb, DB_COOKIES_N_BLAME_INFINITYFREE)
 end
 clock:on("hour", function()
 	throwError(nil, "ClockHour", clockHour)
