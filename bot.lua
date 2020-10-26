@@ -4385,6 +4385,7 @@ commands["lua"] = {
 	description = "Loads a Lua code.",
 	f = function(message, parameters, _, isTest, compEnv, command)
 		local syntax = "Use `!lua ```code``` `."
+		local message_author = message.member or message.author
 
 		if parameters and #parameters > 2 then
 			local foo
@@ -4404,6 +4405,7 @@ commands["lua"] = {
 			local dataLines = {}
 			local repliedMessages = {}
 
+			local guild = message.guild or client:getGuild(channels["guild"])
 			local _ENV = getLuaEnv()
 			local ENV = (hasAuth and devENV or moduleENV) + _ENV
 			if compEnv then
@@ -4467,7 +4469,7 @@ commands["lua"] = {
 						name = message.member.name,
 						nickname = message.member.nickname
 					}) or nil,
-					isDM = not message.guild,
+					isDM = message.channel.type == 1,
 					mentionsEveryone = message.mentionsEveryone,
 					oldContent = message.oldContent
 				}
@@ -4503,7 +4505,7 @@ commands["lua"] = {
 
 				assert((msg.channel.id ~= channels["commu"] and msg.channel.id ~= channels["modules"]), "Message deletion denied.")
 
-				if not message.guild then -- dms
+				if message.channel.type == 1 then -- dms
 					assert(msg.author.id == client.user.id, "You can only delete Modulo's messages in DMs.")
 
 					msg:delete()
@@ -4634,7 +4636,6 @@ commands["lua"] = {
 			end
 
 			local getOwner = function(message, name)
-				local guild = message.guild or client:getGuild(channels["guild"])
 				local owner
 				if isTest == debugAction.cmd then
 					command = tostring(command)
@@ -4715,7 +4716,6 @@ commands["lua"] = {
 				getOwner(message, "getAllMembers")
 
 				local names, index = { }, 0
-				local guild = message.guild or client:getGuild(channels["guild"])
 				guild.members:findAll(function(member)
 					if f(member.id) then
 						index = index + 1
@@ -4767,7 +4767,6 @@ commands["lua"] = {
 				assert(memberName, "Member name can't be nil in discord.getMemberId")
 				memberName = tostring(memberName)
 
-				local guild = message.guild or client:getGuild(channels["guild"])
 				local member = guild.members:find(function(m)
 					return m.tag == memberName or m.nickname == memberName or m.name == memberName
 				end)
@@ -4779,14 +4778,12 @@ commands["lua"] = {
 				assert(memberId, "Member ID can't be nil in discord.getMemberName")
 				memberId = tostring(memberId)
 
-				local guild = message.guild or client:getGuild(channels["guild"])
 				local member = guild:getMember(memberId)
 				return member and member.name
 			end
 
 			ENV.discord.isMember = function(userId)
 				assert(userId, "Member id cannot be nil in discord.isMember")
-				local guild = message.guild or client:getGuild(channels["guild"])
 				return guild:getMember(userId) ~= nil
 			end
 
@@ -4841,11 +4838,10 @@ commands["lua"] = {
 
 			local func, syntaxErr = load(parameters, '', 't', ENV)
 			if not func then
-				local user = message.member or message.author
 				toDelete[message.id] = message:reply({
 					embed = {
 						color = color.lua_err,
-						title = "[" .. user.name .. ".Lua] Error : SyntaxError",
+						title = "[" .. message_author.name .. ".Lua] Error : SyntaxError",
 						description = "```\n" .. syntaxErr .. "```"
 					}
 				})
@@ -4862,11 +4858,10 @@ commands["lua"] = {
 			ms = (os.clock() - ms) * 1000
 
 			if not success then
-				local user = message.member or message.author
 				toDelete[message.id] = message:reply({
 					embed = {
 						color = color.lua_err,
-						title = "[" .. user.name .. ".Lua] Error : RuntimeError",
+						title = "[" .. message_author.name .. ".Lua] Error : RuntimeError",
 						description = "```\n" .. tostring(runtimeErr) .. "```"
 					}
 				})
@@ -4875,12 +4870,11 @@ commands["lua"] = {
 
 			local result
 			if isTest ~= debugAction.cmd then
-				local user = message.member or message.author
 				result = message:reply({
 					embed = {
 						color = color.sys,
 						footer = {
-							text = "[" .. user.name .. ".Lua] Loaded successfully! (Ran in " .. ms .. "ms)"
+							text = "[" .. message_author.name .. ".Lua] Loaded successfully! (Ran in " .. ms .. "ms)"
 						}
 					}
 				})
@@ -4914,8 +4908,7 @@ commands["lua"] = {
 				end
 			end
 		else
-			local user = message.member or message.author
-			sendError(message, user.name .. ".Lua", "Invalid or missing parameters.", syntax)
+			sendError(message, message_author.name .. ".Lua", "Invalid or missing parameters.", syntax)
 		end
 	end
 }
@@ -5289,7 +5282,7 @@ commands["gcmd"] = {
 
 		if parameters and #parameters > 0 then
 			local script, content, title, description = getCommandFormat(parameters)
-			local channelLevel, authLevel, alloDM, command = string.match(parameters, "^(%d)[\n ]+(%d)[\n ]+(%d)[\n ]+([%a][%w_%-]+)[\n ]+")
+			local channelLevel, authLevel, allowDM, command = string.match(parameters, "^(%d)[\n ]+(%d)[\n ]+(%d)[\n ]+([%a][%w_%-]+)[\n ]+")
 
 			if channelLevel then
 				channelLevel = tonumber(channelLevel)
@@ -6646,7 +6639,7 @@ client:on("ready", function()
 end)
 
 local globalCommandCall = function(cmd, message, parameters, command)
-	if message.guild then -- not a DM
+	if message.channel.type ~= 1 then -- not a DM
 		if cmd.category then
 			if cmd.category ~= (message.channel.category and message.channel.category.id or nil) then
 				toDelete[message.id] = message:reply({
