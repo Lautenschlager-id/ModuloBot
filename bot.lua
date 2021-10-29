@@ -15,6 +15,21 @@ end
 local discordia = require("discordia")
 discordia.extensions()
 
+function table.deepcopy(tbl)
+	local ret, isCircular = { }, false
+	for k, v in pairs(tbl) do
+		if k == "_G" then
+			isCircular = true
+		else
+			ret[k] = type(v) == "table" and table.deepcopy(v) or v
+		end
+	end
+	if isCircular then
+		ret._G = ret
+	end
+	return ret
+end
+
 local client = discordia.Client({
 	cacheAllMembers = true
 })
@@ -85,7 +100,7 @@ local pairsByIndexes = function(list, f)
 		if out[i] ~= nil then
 			return out[i], list[out[i]]
 		end
-    end
+	end
 end
 
 --[[ Enums ]]--
@@ -280,6 +295,7 @@ local permMaps = {
 	["21"] = true,
 	["22"] = true,
 	["32"] = true,
+	["34"] = true,
 	["41"] = true,
 	["42"] = true
 }
@@ -301,7 +317,7 @@ local permissions = discordia.enums.enum {
 	is_math = 10,
 	is_fc = 11,
 	is_shades = 12,
-	is_staff = 13,  -- Never change
+	is_staff = 13, -- Never change
 	is_owner = 14,
 	is_mod = 15
 }
@@ -448,7 +464,7 @@ local specialRoleColor = discordia.enums.enum {
 	!table
 ]]
 local roles = {
-	["module member"] = "462279926532276225",
+	["module team"] = "462279926532276225",
 	["developer"] = "462281046566895636",
 	["artist"] = "462285151595003914",
 	["translator"] = "494665355327832064",
@@ -467,7 +483,7 @@ for name, id in next, table.copy(roles) do roles[id] = name end
 	!table
 ]]
 local roleFlags = {
-	[1] = "module member",
+	[1] = "module team",
 	[2] = "developer",
 	[3] = "artist",
 	[4] = "translator",
@@ -486,119 +502,99 @@ for i, name in next, table.copy(roleFlags) do roleFlags[name] = i end
 ]]
 local envTfm = nil
 do
-	local trim = function(n)
-		return bit.band(n, 0xFFFFFFFF)
-	end
-
-	local mask = function(width)
-		return bit.bnot(bit.lshift(0xFFFFFFFF, width))
-	end
-
-	local fieldArgs = function(field, width)
-		width = width or 1
-		assert(field >= 0, "field cannot be negative")
-		assert(width > 0, "width must be positive")
-		assert(field + width <= 32, "trying to access non-existent bits")
-		return field, width
-	end
-
 	local emptyFunction = function() end
 	envTfm = {
 		-- API
 		assert = assert,
 		bit32 = {
-			arshift = function(x, disp)
-				return math.floor(x / (2 ^ disp))
-			end,
-			band = bit.band,
-			bnot = bit.bnot,
-			bor = bit.bor,
-			btest = function(...)
-				return bit.band(...) ~= 0
-			end,
-			bxor = bit.bxor,
-			extract = function(n, field, width)
-				field, width = fieldArgs(field, width)
-				return bit.band(bit.rshift(n, field), mask(width))
-			end,
-			lshift = bit.lsfhit,
-			replace = function(n, v, field, width)
-				field, width = fieldArgs(field, width)
-				width = mask(width)
-				return bit.bor(bit.band(n, bit.bnot(bit.lshift(m, f))), bit.lshift(bit.band(v, m), f))
-			end,
-			rshift = bit.rshift
+			arshift = emptyFunction,
+			band = emptyFunction,
+			bnot = emptyFunction,
+			bor = emptyFunction,
+			btest = emptyFunction,
+			bxor = emptyFunction,
+			extract = emptyFunction,
+			lshift = emptyFunction,
+			replace = emptyFunction,
+			rshift = emptyFunction
 		},
-		coroutine = coroutine,
+		coroutine = {
+		    create = emptyFunction,
+		    yield = emptyFunction,
+		    resume = emptyFunction,
+		    wrap = emptyFunction,
+		    status = emptyFunction,
+		    running = emptyFunction
+		},
 		debug = {
 			disableEventLog = emptyFunction,
 			disableTimerLog = emptyFunction,
-			traceback = debug.traceback
+			traceback = emptyFunction
 		},
 		error = emptyFunction,
-		getmetatable = getmetatable,
-		ipairs = ipairs,
+		getmetatable = emptyFunction,
+		ipairs = emptyFunction,
 		math = {
-			abs = math.abs,
-			acos = math.acos,
-			asin = math.asin,
-			atan = math.atan,
-			atan2 = math.atan2,
-			ceil = math.ceil,
-			cos = math.cos,
-			cosh = math.cosh,
-			deg = math.deg,
-			exp = math.exp,
-			floor = math.floor,
-			fmod = math.fmod,
-			frexp = math.frexp,
-			huge = math.huge,
-			ldexp = math.ldexp,
-			log = math.log,
-			max = math.max,
-			min = math.min,
-			modf = math.modf,
-			pi = math.pi,
-			pow = math.pow,
-			rad = math.rad,
-			random = math.random,
-			randomseed = math.randomseed,
-			sin = math.sin,
-			sinh = math.sinh,
-			sqrt = math.sqrt,
-			tan = math.tan,
-			tanh = math.tanh
+			abs = emptyFunction,
+			acos = emptyFunction,
+			asin = emptyFunction,
+			atan = emptyFunction,
+			atan2 = emptyFunction,
+			ceil = emptyFunction,
+			cos = emptyFunction,
+			cosh = emptyFunction,
+			deg = emptyFunction,
+			exp = emptyFunction,
+			floor = emptyFunction,
+			fmod = emptyFunction,
+			frexp = emptyFunction,
+			huge = emptyFunction,
+			ldexp = emptyFunction,
+			log = emptyFunction,
+			max = emptyFunction,
+			min = emptyFunction,
+			modf = emptyFunction,
+			pi = emptyFunction,
+			pow = emptyFunction,
+			rad = emptyFunction,
+			random = emptyFunction,
+			randomseed = emptyFunction,
+			sin = emptyFunction,
+			sinh = emptyFunction,
+			sqrt = emptyFunction,
+			tan = emptyFunction,
+			tanh = emptyFunction
 		},
 		next = next,
 		os = {
-			date = os.date,
-			difftime = os.difftime,
-			time = os.time
+			date = emptyFunction,
+			difftime = emptyFunction,
+			time = emptyFunction
 		},
-		pairs = pairs,
-		pcall = pcall,
-		print = print,
-		rawequal = rawequal,
-		rawget = rawget,
-		rawlen = rawlen,
-		rawset = rawset,
-		select = select,
-		setmetatable = setmetatable,
+		pairs = emptyFunction,
+		pcall = emptyFunction,
+		print = emptyFunction,
+		rawequal = emptyFunction,
+		rawget = emptyFunction,
+		rawlen = emptyFunction,
+		rawset = emptyFunction,
+		select = emptyFunction,
+		setmetatable = emptyFunction,
 		string = {
-			byte = string.byte,
-			char = string.char,
-			dump = string.dump,
-			find = string.find,
-			format = string.format,
-			gmatch = string.gmatch,
-			gsub = string.gsub,
-			len = string.len,
-			lower = string.lower,
-			match = string.match,
-			rep = string.rep,
-			reverse = string.reverse,
-			sub = string.sub,
-			upper = string.upper
+			byte = emptyFunction,
+			char = emptyFunction,
+			dump = emptyFunction,
+			find = emptyFunction,
+			format = emptyFunction,
+			gmatch = emptyFunction,
+			gsub = emptyFunction,
+			len = emptyFunction,
+			lower = emptyFunction,
+			match = emptyFunction,
+			rep = emptyFunction,
+			reverse = emptyFunction,
+			sub = emptyFunction,
+			upper = emptyFunction
 		},
 		system = {
 			bindKeyboard = emptyFunction,
@@ -614,14 +610,14 @@ do
 			savePlayerData = emptyFunction
 		},
 		table = {
-			concat = table.concat,
-			foreach = table.foreach,
-			foreachi = table.foreachi,
-			insert = table.insert,
-			pack = table.pack,
-			remove = table.remove,
-			sort = table.sort,
-			unpack = table.unpack
+			concat = emptyFunction,
+			foreach = emptyFunction,
+			foreachi = emptyFunction,
+			insert = emptyFunction,
+			pack = emptyFunction,
+			remove = emptyFunction,
+			sort = emptyFunction,
+			unpack = emptyFunction
 		},
 		tfm = {
 			enum = {
@@ -672,8 +668,9 @@ do
 					circle = 13,
 					invisible = 14,
 					web = 15,
-					halloweenGrass = 17,
-					valentinesGrass = 18,
+					yellowGrass = 17,
+					pinkGrass = 18,
+					acid = 19
 				},
 				particle = {
 					whiteGlitter = 0,
@@ -757,9 +754,18 @@ do
 					pumpkinBall = 89,
 					tombstone = 90,
 					paperBall = 95
+				},
+				bonus = {
+					point = 0,
+					speed = 1,
+					death = 2,
+					spring = 3,
+					booster = 5,
+					electricArc = 6
 				}
 			},
 			exec = {
+				addBonus = emptyFunction,
 				addConjuration = emptyFunction,
 				addImage = emptyFunction,
 				addJoint = emptyFunction,
@@ -795,6 +801,7 @@ do
 				newGame = emptyFunction,
 				playEmote = emptyFunction,
 				playerVictory = emptyFunction,
+				removeBonus = emptyFunction,
 				removeCheese = emptyFunction,
 				removeImage = emptyFunction,
 				removeJoint = emptyFunction,
@@ -812,6 +819,7 @@ do
 				setUIMapName = emptyFunction,
 				setUIShamanName = emptyFunction,
 				setVampirePlayer = emptyFunction,
+				setWorldGravity = emptyFunction,
 				snow = emptyFunction
 			},
 			get = {
@@ -822,6 +830,8 @@ do
 				room = {
 					community = "en",
 					currentMap = 0,
+					isTribeHouse = false,
+					language = "en",
 					maxPlayers = 50,
 					mirroredMap = false,
 					name = "en-#lua",
@@ -847,6 +857,7 @@ do
 					playerList = {
 						["Tigrounette#0001"] = {
 							community = "en",
+							cheeses = 0,
 							gender = 0,
 							hasCheese = false,
 							id = 0,
@@ -857,6 +868,7 @@ do
 							isJumping = false,
 							isShaman = false,
 							isVampire = false,
+							language = "en",
 							look = "1;0,0,0,0,0,0,0,0,0",
 							movingLeft = false,
 							movingRight = false,
@@ -885,9 +897,9 @@ do
 				}
 			}
 		},
-		tonumber = tonumber,
-		tostring = tostring,
-		type = type,
+		tonumber = emptyFunction,
+		tostring = emptyFunction,
+		type = emptyFunction,
 		ui = {
 			addPopup = emptyFunction,
 			addTextArea = emptyFunction,
@@ -897,7 +909,7 @@ do
 			showColorPicker = emptyFunction,
 			updateTextArea = emptyFunction
 		},
-		xpcall = xpcall,
+		xpcall = emptyFunction,
 
 		-- Events
 		eventChatCommand = emptyFunction,
@@ -913,6 +925,7 @@ do
 		eventPlayerDataLoaded = emptyFunction,
 		eventPlayerDied = emptyFunction,
 		eventPlayerGetCheese = emptyFunction,
+		eventPlayerBonusGrabbed  = emptyFunction,
 		eventPlayerLeft = emptyFunction,
 		eventPlayerMeep = emptyFunction,
 		eventPlayerVampire = emptyFunction,
@@ -926,28 +939,8 @@ do
 		eventColorPicked = emptyFunction
 	}
 
-	envTfm.bit32.lrotate = function(x, disp)
-		if disp == 0 then
-			return x
-		elseif disp < 0 then
-			return bit.rrotate(x, -disp)
-		else
-			disp = bit.band(disp, 31)
-			x = trim(x)
-			return trim(bit.bor(bit.lshift(x, disp), bit.rshift(x, (32 - disp))))
-		end
-	end
-	envTfm.bit32.rrotate = function(x, disp)
-		if disp == 0 then
-			return x
-		elseif disp < 0 then
-			return bit.lrotate(x, -disp)
-		else
-			disp = bit.band(disp, 31)
-			x = trim(x)
-			return trim(bit.bor(bit.rshift(x, disp), bit.lshift(x, (32 - disp))))
-		end
-	end
+	envTfm.bit32.lrotate = emptyFunction
+	envTfm.bit32.rrotate = emptyFunction
 	envTfm.tfm.get.room.playerList["Pikashu#0001"] = envTfm.tfm.get.room.playerList["Tigrounette#0001"]
 	envTfm._G = envTfm
 end
@@ -1011,7 +1004,7 @@ local devRestrictions = { "_G", "getfenv", "setfenv" }
 ]]
 local moduleRestrictions = { "debug", "dofile", "io", "load", "loadfile", "loadstring", "jit", "module", "p", "package", "process", "require", "os" }
 
-local specialInvites =  {
+local specialInvites = {
 	mycity = {
 		code = "QPyBwUh",
 		uses = 0,
@@ -1119,14 +1112,14 @@ do
 			index = 1,
 			type = "number",
 			min = 0,
-			max = 20,
+			max = 50,
 			description = "The quantity of modules you currently host."
 		},
 		modules = {
 			index = 2,
 			type = "number",
 			min = 0,
-			max = 50,
+			max = 100,
 			description = "The quantity of modules you developed."
 		},
 		github = {
@@ -1394,11 +1387,11 @@ fixHtml = function(str, link)
 	link = link or ''
 	str = str:gsub("<(.-)>(.-)</%1>", function(html, content)
 		if html == 'b' then
-        	return "**" .. fixHtml(content, link) .. "**"
-        elseif html == 'i' then
-        	return "*" .. fixHtml(content, link) .. "*"
-        elseif html == 'u' then
-        	return "__" .. fixHtml(content, link) .. "__"
+			return "**" .. fixHtml(content, link) .. "**"
+		elseif html == 'i' then
+			return "*" .. fixHtml(content, link) .. "*"
+		elseif html == 'u' then
+			return "__" .. fixHtml(content, link) .. "__"
 		end
 		return fixHtml(content, link)
 	end)
@@ -1596,7 +1589,7 @@ local hasPermission = function(permission, member, message)
 		end
 		return false
 	elseif permission == permissions.is_module then
-		return member:hasRole(roles["module member"])
+		return member:hasRole(roles["module team"])
 	elseif permission == permissions.is_dev then
 		return member:hasRole(roles["developer"])
 	elseif permission == permissions.is_art then
@@ -1638,38 +1631,38 @@ end
 	>string
 ]]
 local htmlToMarkdown = function(str)
-    str = string.gsub(str, "&#(%d+);", function(dec) return string.char(dec) end)
-    str = string.gsub(str, '<span style="(.-);">(.-)</span>', function(x, content)
-        local markdown = ""
-        if x == "font-weight:bold" then
-            markdown = "**"
-        elseif x == "font-style:italic" then
-            markdown = '_'
-        elseif x == "text-decoration:underline" then
-            markdown = "__"
-        elseif x == "text-decoration:line-through" then
-            markdown = "~~"
-        end
-        return markdown .. content .. markdown
-    end)
-    str = string.gsub(str, '<p style="text-align:.-;">(.-)</p>', "%1")
-    str = string.gsub(str, '<blockquote.->(.-)<div>(.-)</div></blockquote>', function(name, content)
+	str = string.gsub(str, "&#(%d+);", function(dec) return string.char(dec) end)
+	str = string.gsub(str, '<span style="(.-);">(.-)</span>', function(x, content)
+		local markdown = ""
+		if x == "font-weight:bold" then
+			markdown = "**"
+		elseif x == "font-style:italic" then
+			markdown = '_'
+		elseif x == "text-decoration:underline" then
+			markdown = "__"
+		elseif x == "text-decoration:line-through" then
+			markdown = "~~"
+		end
+		return markdown .. content .. markdown
+	end)
+	str = string.gsub(str, '<p style="text-align:.-;">(.-)</p>', "%1")
+	str = string.gsub(str, '<blockquote.->(.-)<div>(.-)</div></blockquote>', function(name, content)
 		local m = string.match(name, "<small>(.-)</small>")
-        return (m and ("`" .. m .. "`\n") or "") .. "```\n" .. (#content > 50 and string.sub(content, 1, 50) .. "..." or content) .. "```"
-    end)
-    str = string.gsub(str, '<a href="(.-)".->(.-)</a>', "[%2](%1)")
-    str = string.gsub(str, "<br ?/?>", "\n")
-    str = string.gsub(str, "&gt;", '>')
-    str = string.gsub(str, "&lt;", '<')
-    str = string.gsub(str, "&quot;", "\"")
-    str = string.gsub(str, "&laquo;", '«')
-    str = string.gsub(str, "&raquo;", '»')
+		return (m and ("`" .. m .. "`\n") or "") .. "```\n" .. (#content > 50 and string.sub(content, 1, 50) .. "..." or content) .. "```"
+	end)
+	str = string.gsub(str, '<a href="(.-)".->(.-)</a>', "[%2](%1)")
+	str = string.gsub(str, "<br ?/?>", "\n")
+	str = string.gsub(str, "&gt;", '>')
+	str = string.gsub(str, "&lt;", '<')
+	str = string.gsub(str, "&quot;", "\"")
+	str = string.gsub(str, "&laquo;", '«')
+	str = string.gsub(str, "&raquo;", '»')
 	str = string.gsub(str, '<div class="cadre cadre%-code">(.-)<div class="contenu.-<pre class="colonne%-lignes%-code">(.-)</pre></div></div>', function(language, code)
 		language = string.match(language, '<div class="indication%-langage%-code">(.-) code</div><hr/>') or ''
 		code = string.gsub(code, "<span .->(.-)</span>", "%1")
 		return "```" .. language .. "\n" .. code .. "```"
 	end)
-    return str
+	return str
 end
 
 --[[Doc
@@ -1958,7 +1951,7 @@ local throwError = function(message, errName, fn, ...)
 			content = "<@" .. client.owner.id .. ">",
 			embed = {
 				color = color.lua_err,
-				title = (type(errName) == "string" and  ("evt@" .. errName) or errName[1]) .. " => Fatal Error!",
+				title = (type(errName) == "string" and ("evt@" .. errName) or errName[1]) .. " => Fatal Error!",
 				description = "```\n" .. err .. "```\n```\n" .. debug.traceback() .. "```"
 			}
 		}
@@ -1966,7 +1959,7 @@ local throwError = function(message, errName, fn, ...)
 		if message then
 			toDelete[message.id] = message:reply(content)
 		else
-			content.content = "<@" .. client.owner.id  .. ">"
+			content.content = "<@" .. client.owner.id .. ">"
 			client:getChannel(channels["code-test"]):send(content)
 		end
 	end
@@ -2133,8 +2126,8 @@ local addRuntimeLimit = function(parameters, message, timerNameUserId)
 	end
 
 	if hasChanged then
-        local member = message.member or client:getGuild(channels["guild"]):getMember(message.author.id)
-        local s = runtimeLimitByMember(member)
+		local member = message.member or client:getGuild(channels["guild"]):getMember(message.author.id)
+		local s = runtimeLimitByMember(member)
 		parameters = "local " .. func .. " do local t,e,m,ts=os.time,error,\"Your code has exceeded the runtime limit of " .. s .. "s.\",tostring " .. func .. "=function() if t()>" .. getTimerName(timerNameUserId or message.author.id) .. " then e(ts(m),2) end end end " .. parameters
 		return parameters, s
 	end
@@ -2171,39 +2164,39 @@ local postNewBreaches = function()
 		i = new[i]
 
 		breach:send({
-		  embed = {
-		    color = 0x962529,
-		    thumbnail = { url = i.LogoPath },
-		    title = "**" .. i.Name .. " HAS BEEN PWNED!**",
-		    description = "**" .. i.Title .. " | " .. i.Domain .. "**\n\nVerified: " .. tostring(i.IsVerified),
-		    fields = {
-		      [1] = {
-		        name = "What has been compromised?",
-		        value = "• " .. table.concat(i.DataClasses, "\n• "),
-		        inline = true
-		      },
-		      [2] = {
-		        name = "Affected accounts",
-		        value = i.PwnCount .. "+",
-		        inline = true
-		      },
-		      [3] = {
-		        name = "Is Sensitive",
-		        value = tostring(i.IsSensitive),
-		        inline = true
-		      },
-		      [4] = {
-		        name = "Happened in",
-		        value = tostring(i.BreachDate),
-		        inline = true
-		      },
-		      [5] = {
-		        name = "Detected in",
-		        value = tostring(i.AddedDate),
-		        inline = true
-		      }
-		    }
-		  }
+			embed = {
+				color = 0x962529,
+				thumbnail = { url = i.LogoPath },
+				title = "**" .. i.Name .. " HAS BEEN PWNED!**",
+				description = "**" .. i.Title .. " | " .. i.Domain .. "**\n\nVerified: " .. tostring(i.IsVerified),
+				fields = {
+					[1] = {
+						name = "What has been compromised?",
+						value = "• " .. table.concat(i.DataClasses, "\n• "),
+						inline = true
+					},
+					[2] = {
+						name = "Affected accounts",
+						value = i.PwnCount .. "+",
+						inline = true
+					},
+					[3] = {
+						name = "Is Sensitive",
+						value = tostring(i.IsSensitive),
+						inline = true
+					},
+					[4] = {
+						name = "Happened in",
+						value = tostring(i.BreachDate),
+						inline = true
+					},
+					[5] = {
+						name = "Detected in",
+						value = tostring(i.AddedDate),
+						inline = true
+					}
+				}
+			}
 		})
 	end
 end
@@ -2398,7 +2391,7 @@ commands["adoc"] = {
 				local _, init = string.find(body, "id=\"message_19532184\">•")
 				body = string.sub(body, init)
 
-				local syntax, description = string.match(body, "•  (" .. parameters .. " .-)\n(.-)\n\n\n\n")
+				local syntax, description = string.match(body, "•  (%S*" .. parameters .. "%S* .-)\n(.-)\n\n\n\n")
 
 				if syntax then
 					description = string.gsub(description, "&sect;", "§")
@@ -2711,7 +2704,7 @@ commands["doc"] = {
 
 					description = string.gsub(description, "<code>(.-)</code>", "`%1`")
 					description = string.gsub(description, "<pre>(.-)</pre>", function(code)
-						return "```Lua¨" .. (string.gsub(string.gsub(code, "\n", "¨"), "¨     ", "¨")) .. "```"
+						return "```Lua¨" .. (string.gsub(string.gsub(code, "\n", "¨"), "¨	 ", "¨")) .. "```"
 					end)
 
 					description = string.gsub(description, "&sect;", '§')
@@ -2972,7 +2965,7 @@ commands["help"] = {
 			end
 			toDelete[message.id] = msg
 
-			timer.setTimeout(1.25 * 60 * 1000, coroutine.wrap(function(msg)
+			timer.setTimeout(3 * 60 * 1000, coroutine.wrap(function(msg)
 				if toDelete[message.id] then
 					messageDelete(message)
 				end
@@ -3122,7 +3115,7 @@ commands["mobile"] = {
 }
 commands["modules"] = {
 	auth = permissions.public,
-	description = "Lists the current modules available in Transformice. [by name | from community | level 0/1 | #pattern]",
+	description = "Lists the current modules available in Transformice. [by name | from community | level 0/1/2 | #pattern]",
 	f = function(message, parameters)
 		local search = {
 			a_commu = false, -- alias
@@ -3179,7 +3172,7 @@ commands["modules"] = {
 						check = moduleCommunity == search.commu
 					end
 					if search.type then
-						check = check and ((search.type == 0 and not moduleData.isOfficial) or (search.type == 1 and moduleData.isOfficial))
+						check = check and ((search.type == 0 and not moduleData.isOfficial) or (search.type == 1 and moduleData.isOfficial) or (search.type == 2 and moduleData.isDisabled))
 					end
 					if search.player then
 						check = check and not not string.find(string.lower(moduleData.hoster), search.player)
@@ -3191,7 +3184,7 @@ commands["modules"] = {
 
 				if check then
 					counter = counter + 1
-					list[counter] = { moduleCommunity, moduleData.name, (moduleData.isOfficial and "official" or "semi-official"), (moduleCommunity == "xx" and '-' or moduleData.hoster) }
+					list[counter] = { moduleCommunity, moduleData.name, (moduleData.isDisabled and "disabled" or moduleData.isOfficial and "official" or "semi-official"), (moduleCommunity == "xx" and '-' or moduleData.hoster) }
 				end
 			end
 		end
@@ -3202,7 +3195,7 @@ commands["modules"] = {
 				embed = {
 					color = color.err,
 					title = "<:wheel:456198795768889344> Modules",
-					description = "There are no modules " .. (search.commu and ("made by [:flag_" .. string.lower(search.commu) .. ":] **" .. string.upper(search.commu) .. "** ") or '') .. (search.player and ("made by **" .. search.player .. "** ") or '') .. (search.type and ("that are [" .. (search.type == 0 and "semi-official" or "official") .. "]") or '') .. (search.pattern and (" with the pattern **`" .. tostring(search.pattern) .. "`**.") or ".")
+					description = "There are no modules " .. (search.commu and ("made by [:flag_" .. string.lower(search.commu) .. ":] **" .. string.upper(search.commu) .. "** ") or '') .. (search.player and ("made by **" .. search.player .. "** ") or '') .. (search.type and ("that are [" .. (search.type == 0 and "semi-official" or search.type == 1 and "official" or search.type == 2 and "disabled") .. "]") or '') .. (search.pattern and (" with the pattern **`" .. tostring(search.pattern) .. "`**.") or ".")
 				}
 			})
 		else
@@ -3212,7 +3205,7 @@ commands["modules"] = {
 
 			local lines, msgs = splitByLine(out), { }
 			for line = 1, #lines do
-				msgs[line] =  message:reply({
+				msgs[line] = message:reply({
 					content = (line == 1 and "<@!" .. message.author.id .. ">" or nil),
 					embed = {
 						color = color.sys,
@@ -3429,7 +3422,7 @@ commands["profile"] = {
 
 			fields[#fields + 1] = {
 				name = ":clock10: Timezone",
-				value = "**" .. (timezone.zone or '?') .. "** @ **" .. (timezone.country or '?')  .. "** (" .. code .. ")\n[GMT" .. (not timezone.utc and '' or ((timezone.utc > 0 and '+' or '') .. timezone.utc)) .. "] " .. os.date("%H:%M:%S `%d/%m/%Y`", os.time() + ((timezone.utc or 0) * 3600)),
+				value = "**" .. (timezone.zone or '?') .. "** @ **" .. (timezone.country or '?') .. "** (" .. code .. ")\n[GMT" .. (not timezone.utc and '' or ((timezone.utc > 0 and '+' or '') .. timezone.utc)) .. "] " .. os.date("%H:%M:%S `%d/%m/%Y`", os.time() + ((timezone.utc or 0) * 3600)),
 				inline = true
 			}
 		end
@@ -3690,7 +3683,7 @@ commands["serverinfo"] = {
 					},
 					[7] = {
 						name = ":family_mmgb: Members",
-						value = string.format("<:%s> Online: %s | <:%s> Away: %s | <:%s> Busy: %s | <:offline:456197711457419276> Offline: %s\n\n:raising_hand: **Total:** %s\n\n<:wheel:456198795768889344> **Module Members**: %s\n<:lua:468936022248390687> **Developers**: %s\n<:p5:468937377981923339> **Artists**: %s\n:earth_americas: **Translators**: %s\n<:p41:463508055577985024> **Mappers**: %s\n<:idea:559070151278854155> **Event Managers**: %s\n<:illuminati:542115872328646666> **Shades Helpers**: %s\n<:fun:559069782469771264> **Funcorps**: %s\n:triangular_ruler: **Mathematicians**: %s\n<:dance:468937918115741718> **Fashionistas**: %s\n:pencil: **Writers**: %s", reactions.online, members:count(function(member)
+						value = string.format("<:%s> Online: %s | <:%s> Away: %s | <:%s> Busy: %s | <:offline:456197711457419276> Offline: %s\n\n:raising_hand: **Total:** %s\n\n<:wheel:456198795768889344> **Module Team**: %s\n<:lua:468936022248390687> **Developers**: %s\n<:p5:468937377981923339> **Artists**: %s\n:earth_americas: **Translators**: %s\n<:p41:463508055577985024> **Mappers**: %s\n<:idea:559070151278854155> **Event Managers**: %s\n<:illuminati:542115872328646666> **Shades Helpers**: %s\n<:fun:559069782469771264> **Funcorps**: %s\n:triangular_ruler: **Mathematicians**: %s\n<:dance:468937918115741718> **Fashionistas**: %s\n:pencil: **Writers**: %s", reactions.online, members:count(function(member)
 							return member.status == "online"
 						end), reactions.idle, members:count(function(member)
 							return member.status == "idle"
@@ -3699,7 +3692,7 @@ commands["serverinfo"] = {
 						end), members:count(function(member)
 							return member.status == "offline"
 						end), message.guild.totalMemberCount - bots, members:count(function(member)
-							return member:hasRole(roles["module member"])
+							return member:hasRole(roles["module team"])
 						end), members:count(function(member)
 							return member:hasRole(roles["developer"])
 						end), message.guild.members:count(function(member)
@@ -3756,8 +3749,8 @@ commands["tfmprofile"] = {
 	description = "Displays your profile on Transformice.",
 	f = function(message, parameters)
 		if parameters and #parameters > 2 then
-			parameters = string.nickname(parameters)
-			local head, body = http.request("GET", "https://cheese.formice.com/api/mouse/@" .. encodeUrl(parameters))
+			parameters = string.nickname(parameters, true)
+			local head, body = http.request("GET", "https://cheese.formice.com/api/players/" .. parameters:gsub('#', '-', 1))
 			body = json.decode(body)
 
 			if body then
@@ -3765,17 +3758,19 @@ commands["tfmprofile"] = {
 					return sendError(message, "TFMPROFILE", "Player '" .. parameters .. "' not found.")
 				end
 
-				local level, remain, need = expToLvl(tonumber(body.experience))
+				local level, remain, need = expToLvl(tonumber(body.stats.shaman.experience))
 
 				local soulmate
-				if body.id_spouse then
+				if body.soulmate then
 					local _
-					_, soulmate = http.request("GET", "https://cheese.formice.com/api/mouse/:" .. body.id_spouse)
+					_, soulmate = http.request("GET", "https://cheese.formice.com/api/players/" .. body.soulmate.name:gsub('#', '-', 1))
 					soulmate = json.decode(soulmate)
 					if soulmate then
 						soulmate = soulmate.name
 					end
 				end
+
+				body.id_gender = body.gender == "male" and 2 or body.gender == "female" and 1
 
 				local playerTitle = title[title._id[body.title * 1]].name
 				if type(playerTitle) == "table" then
@@ -3786,7 +3781,16 @@ commands["tfmprofile"] = {
 					embed = {
 						color = color.atelier801,
 						title = "<:tfm_cheese:458404666926039053> Transformice Profile - " .. parameters .. (body.id_gender == 2 and " <:male:456193580155928588>" or body.id_gender == 1 and " <:female:456193579308679169>" or ""),
-						description = --[[(body.registration_date == "" and "" or (":calendar: " .. body.registration_date .. "\n\n")) .. ]]"**Level " .. level .. "** " .. getRate(math.percent(remain, (remain + need)), 100, 5) .. "\n" .. (body.tribe_name and ("\n<:tribe:458407729736974357> **Tribe :** " .. body.tribe_name) or "") .. "\n:star: «" .. playerTitle .. "»\n<:shaman:512015935989612544> " .. body.saved_mice .. " / " .. body.saved_mice_hard .. " / " .. body.saved_mice_divine .. "\n<:tfm_cheese:458404666926039053> **Shaman cheese :** " .. body.shaman_cheese .. "\n\n<:racing:512016668038266890> **Firsts :** " .. body.first .. " " .. getRate(math.percent(body.first, body.round_played, 100), 100, 5) .. "\n<:tfm_cheese:458404666926039053> **Cheese: ** " .. body.cheese_gathered .. " " .. getRate(math.percent(body.cheese_gathered, body.round_played, 100), 100, 5) .. "\n\n<:bootcamp:512017071031451654> **Bootcamps :** " .. body.bootcamp .. (soulmate and("\n\n:revolving_hearts: **" .. normalizeDiscriminator(soulmate) .. (body.marriage_date and ("** since **" .. os.date("%x %X", body.marriage_date) .. "**") or "**")) or ""),
+						description = --[[(body.registration_date == "" and "" or (":calendar: " .. body.registration_date .. "\n\n")) .. ]]
+							"**Level " .. level .. "** " .. getRate(math.percent(remain, (remain + need)), 100, 5) .. "\n"
+							.. (body.tribe and body.tribe.name and ("\n<:tribe:458407729736974357> **Tribe :** " .. body.tribe.name) or "")
+							.. "\n:star: «" .. playerTitle .. "»\n<:shaman:512015935989612544> "
+							.. body.stats.shaman.saves_normal .. " / " .. body.stats.shaman.saves_hard .. " / " .. body.stats.shaman.saves_divine
+							.. "\n<:tfm_cheese:458404666926039053> **Shaman cheese :** " .. body.stats.shaman.cheese
+							.. "\n\n<:racing:512016668038266890> **Firsts :** " .. body.stats.mouse.first .. " " .. getRate(math.percent(body.stats.mouse.first, body.stats.mouse.rounds, 100), 100, 5)
+							.. "\n<:tfm_cheese:458404666926039053> **Cheese: ** " .. body.stats.mouse.cheese .. " " .. getRate(math.percent(body.stats.mouse.cheese, body.stats.mouse.rounds, 100), 100, 5)
+							.. "\n\n<:bootcamp:512017071031451654> **Bootcamps :** " .. body.stats.mouse.bootcamp
+							.. (soulmate and ("\n\n:revolving_hearts: **" .. normalizeDiscriminator(soulmate) .. --[[(body.marriage_date and ("** since **" .. os.date("%x %X", body.marriage_date) .. "**") or]] "**"--[[)]]) or ""),
 						thumbnail = { url = "http://avatars.atelier801.com/" .. (body.id % 10000) .. "/" .. body.id .. ".jpg" }
 					}
 				})
@@ -4065,20 +4069,15 @@ commands["xml"] = {
 			end
 
 			if string.find(parameters, "<C>") then
-				local head, body = http.request("POST", "https://xml-drawer.herokuapp.com/", { { "content-type", "application/x-www-form-urlencoded" } }, "xml=" .. encodeUrl(parameters))
+				local head, body = http.request("POST", "https://miceditor-map-preview.herokuapp.com/", { { "Content-Type", "application/json" } }, json.encode({ xml = parameters, raw =  false }))
 
 				if head.code == 200 then
-					local file = io.open(message.author.id .. ".png", 'w')
-					file:write(body)
-					file:flush()
-					file:close()
-
 					toDelete[message.id] = message:reply({
 						content = "<@!" .. message.author.id .. "> | XML ~> " .. (#parameters / 1000) .. "kb",
-						file = message.author.id .. ".png"
+						embed = {
+							image = { url = body }
+						}
 					})
-
-					os.remove(message.author.id .. ".png")
 				else
 					sendError(message, "XML", "Fatal error. Try again later.")
 				end
@@ -4553,11 +4552,14 @@ commands["lua"] = {
 					end
 				end
 
-				local isPost = not not string.find(url, "^!")
-				if isPost then
+				local method = string.sub(url, 1, 1)
+				if method == "!" or method == "*" or method == "@" then -- POST, DELETE, PATCH
 					url = string.sub(url, 2)
+					method = (method == "!" and "POST" or method == "*" and "DELETE" or method == "@" and "PATCH")
+				else
+					method = nil
 				end
-				return http.request((isPost and "POST" or "GET"), url, header, body)
+				return http.request((method or "GET"), url, header, body)
 			end
 			--[[Doc
 				"Sends a message in the channel."
@@ -4787,13 +4789,20 @@ commands["lua"] = {
 				return guild:getMember(userId) ~= nil
 			end
 
-			ENV.discord.sendPrivateMessage = function(content)
+			ENV.discord.sendPrivateMessage = function(content, id)
 				assert(content, "Content cannot be nil in discord.sendPrivateMessage")
+
 				if type(content) ~= "table" then
 					content = tostring(content)
 				end
 
-				local msg = message.author:send(content)
+				local sendTo = message.author
+				if id and getOwner(message, "sendPrivateMessage") then
+					sendTo = client:getUser(id)
+					assert(sendTo, "Cannot retrieve target user in discord.sendPrivateMessage")
+				end
+
+				local msg = sendTo:send(content)
 				return msg and msg.id
 			end
 
@@ -5337,7 +5346,7 @@ commands["gcmd"] = {
 								sendError(message, "GCMD", "Invalid syntax.", syntax)
 							end
 						else
-							sendError(message, "GCMD", "Invalid level flag.", "The authorization level must be 0 (Users), 1 (Developers) or 2 (Module Member).")
+							sendError(message, "GCMD", "Invalid level flag.", "The authorization level must be 0 (Users), 1 (Developers) or 2 (Module Team).")
 						end
 					else
 						sendError(message, "GCMD", "Invalid syntax.", syntax)
@@ -5423,13 +5432,13 @@ commands["module"] = {
 						setPermissions(tutorial:getPermissionOverwriteFor(staff_role), permissionOverwrites.tutorial.allowed, permissionOverwrites.tutorial.denied)
 
 						-- Owners
-						local owners = client:getChannel("560901122349465611")
-						owners:getPermissionOverwriteFor(owner_role):allowPermissions(table.unpack(permissionOverwrites.owners_staffs.allowed))
+						--local owners = client:getChannel("560901122349465611")
+						--owners:getPermissionOverwriteFor(owner_role):allowPermissions(table.unpack(permissionOverwrites.owners_staffs.allowed))
 
 						-- Staffs
-						local staffs = client:getChannel("560901441632469028")
-						staffs:getPermissionOverwriteFor(owner_role):allowPermissions(table.unpack(permissionOverwrites.owners_staffs.allowed))
-						staffs:getPermissionOverwriteFor(staff_role):allowPermissions(table.unpack(permissionOverwrites.owners_staffs.allowed))
+						--local staffs = client:getChannel("560901441632469028")
+						--staffs:getPermissionOverwriteFor(owner_role):allowPermissions(table.unpack(permissionOverwrites.owners_staffs.allowed))
+						--staffs:getPermissionOverwriteFor(staff_role):allowPermissions(table.unpack(permissionOverwrites.owners_staffs.allowed))
 
 						owner:addRole(owner_role)
 
@@ -5492,7 +5501,7 @@ commands["mute"] = {
 					embed = {
 						color = color.moderation,
 						title = ":alarm_clock: Mute",
-						description = description  .. ("\n\nBy <@" .. message.member.id .. "> [" .. message.member.name .. "]"),
+						description = description .. ("\n\nBy <@" .. message.member.id .. "> [" .. message.member.name .. "]"),
 						timestamp = message.timestamp:gsub(" ", '')
 					}
 				})
@@ -5590,7 +5599,7 @@ commands["commu"] = {
 			if not exists then
 				local role = message.guild:createRole(parameters)
 
-				local botRole = message.guild:getRole(roles["module member"]) -- MT
+				local botRole = message.guild:getRole(roles["module team"]) -- MT
 				role:moveUp(botRole.position - #roleFlags - 1)
 
 				local channel = message.guild:createTextChannel(parameters)
@@ -5638,9 +5647,7 @@ commands["del"] = {
 			if limit then limit = math.clamp(limit, 1, 100) end
 
 			if message.channel:getMessage(messageId) then
-				for msg in message.channel:getMessagesAfter(messageId, limit):iter() do
-					msg:delete()
-				end
+				message.channel:bulkDelete(message.channel:getMessagesAfter(messageId, limit))
 			else
 				sendError(message, "DEL", "Message id not found.", syntax)
 			end
@@ -6516,7 +6523,9 @@ client:on("ready", function()
 
 			json = { encode = json.encode, decode = json.decode },
 
-			os = { clock = os.clock, date = os.date, difftime = os.difftime, time = os.time }
+			os = { clock = os.clock, date = os.date, difftime = os.difftime, time = os.time },
+
+			getImageDimensions = imageHandler.getDimensions
 		}, {
 			__index = restricted_Gmodule
 		}),
@@ -6584,7 +6593,9 @@ client:on("ready", function()
 			postNewBreaches = postNewBreaches,
 
 			DB_COOKIES_N_BLAME_INFINITYFREE = DB_COOKIES_N_BLAME_INFINITYFREE,
-			db_url = db_url
+			db_url = db_url,
+
+			getImageDimensions = imageHandler.getDimensions
 		}, {
 			__index = restricted_G
 		}),
@@ -6837,13 +6848,7 @@ messageDelete = function(message, skipChannelActivity)
 	if not message.guild or message.guild.id ~= channels["guild"] then return end
 
 	if toDelete[message.id] then
-		local msg
-		for id = 1, #toDelete[message.id] do
-			msg = message.channel:getMessage(toDelete[message.id][id])
-			if msg then
-				msg:delete()
-			end
-		end
+		message.channel:bulkDelete(toDelete[message.id])
 
 		toDelete[message.id] = nil
 	elseif not skipChannelActivity and message.author.id ~= client.user.id then
@@ -6875,7 +6880,7 @@ messageDelete = function(message, skipChannelActivity)
 				embed = {
 					color = color.sys,
 					description = message.content,
-					image =  ((message.attachment and message.attachment.url) and { url = message.attachment.url } or nil),
+					image = ((message.attachment and message.attachment.url) and { url = message.attachment.url } or nil),
 					footer = {
 						text = "In " .. (message.channel.category and (message.channel.category.name .. ".#") or "#") .. message.channel.name,
 					},
@@ -6889,7 +6894,7 @@ messageDelete = function(message, skipChannelActivity)
 	end
 end
 local messageUpdate = function(message)
-	if message.channel.id == channels["bridge"] then return end
+	if message.channel.id == channels["bridge"] or message.embed then return end
 
 	messageDelete(message, true)
 	messageCreate(message, true)
