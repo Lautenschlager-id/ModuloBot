@@ -30,12 +30,25 @@ imageHandler.fromUrl = function(url)
 	return setmetatable(img, meta)
 end
 
+imageHandler.getDimensions = function(self, url)
+	if not url then
+		url = imageHandler.fromUrl(self)
+	else
+		url = self
+	end
+
+	local f = io.popen("identify -ping -format '%w %h' '" .. url._path .. "'")
+	local w, h = string.match(f:read("*a"), "(%d+) +(%d+)")
+	f:close()
+	return w, h
+end
+
 local addFlag = function(self, flag, param)
-	self._flags[#self._flags + 1] = flag .. (param and (" " .. param) or "")
+	self._flags[#self._flags + 1] = not param and flag or flag:format(param)
 	return self
 end
 
-local addMethod = function(name, flag, hasParam)
+imageHandler.__addMethod = function(name, flag, hasParam)
 	imageHandler.methodFlags[name] = hasParam and 1 or 0
 	ImageMethods[name] = function(self, param)
 		if hasParam and not param then
@@ -45,11 +58,12 @@ local addMethod = function(name, flag, hasParam)
 	end
 end
 
-addMethod("hflip", "-flop")
-addMethod("negative", "-negate")
-addMethod("resize", "-resize", true)
-addMethod("rotate", "-background 'rgba(0,0,0,0)' -rotate", true)
-addMethod("vflip", "-flip")
+imageHandler.__addMethod("hflip", "-flop")
+imageHandler.__addMethod("negative", "-negate")
+imageHandler.__addMethod("resize", "-resize %s", true)
+imageHandler.__addMethod("rotate", "-background 'rgba(0,0,0,0)' -rotate %s", true)
+imageHandler.__addMethod("vflip", "-flip")
+imageHandler.__addMethod("opacity", "-matte -channel A +level 0,%s%% +channel", true)
 
 --[[Doc
 	~
