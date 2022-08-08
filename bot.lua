@@ -209,6 +209,9 @@ local reactions = {
 	thumbsup = "\xF0\x9F\x91\x8D",
 	thumbsdown = "\xF0\x9F\x91\x8E"
 }
+
+local luaDoc
+
 --[[Doc
 	"Flags of the bytes of the flag emojis of each community in Transformice."
 	!table
@@ -519,12 +522,12 @@ do
 			rshift = emptyFunction
 		},
 		coroutine = {
-		    create = emptyFunction,
-		    yield = emptyFunction,
-		    resume = emptyFunction,
-		    wrap = emptyFunction,
-		    status = emptyFunction,
-		    running = emptyFunction
+			create = emptyFunction,
+			yield = emptyFunction,
+			resume = emptyFunction,
+			wrap = emptyFunction,
+			status = emptyFunction,
+			running = emptyFunction
 		},
 		debug = {
 			disableEventLog = emptyFunction,
@@ -604,6 +607,7 @@ do
 			giveEventGift = emptyFunction,
 			loadFile = emptyFunction,
 			loadPlayerData = emptyFunction,
+			luaEventLaunchInterval = emptyFunction,
 			newTimer = emptyFunction,
 			removeTimer = emptyFunction,
 			saveFile = emptyFunction,
@@ -771,6 +775,7 @@ do
 				addJoint = emptyFunction,
 				addPhysicObject = emptyFunction,
 				addShamanObject = emptyFunction,
+				attachBalloon = emptyFunction,
 				bindKeyboard = emptyFunction,
 				changePlayerSize = emptyFunction,
 				chatMessage = emptyFunction,
@@ -789,6 +794,7 @@ do
 				displayParticle = emptyFunction,
 				explosion = emptyFunction,
 				freezePlayer = emptyFunction,
+				getPlayerSync = emptyFunction,
 				giveCheese = emptyFunction,
 				giveConsumables = emptyFunction,
 				giveMeep = emptyFunction,
@@ -812,6 +818,7 @@ do
 				setGameTime = emptyFunction,
 				setNameColor = emptyFunction,
 				setPlayerScore = emptyFunction,
+				setPlayerSync = emptyFunction,
 				setRoomMaxPlayers = emptyFunction,
 				setRoomPassword = emptyFunction,
 				setShaman = emptyFunction,
@@ -824,7 +831,7 @@ do
 			},
 			get = {
 				misc = {
-					apiVersion = 0.27,
+					apiVersion = 0.28,
 					transformiceVersion = 5.86
 				},
 				room = {
@@ -904,6 +911,7 @@ do
 			addPopup = emptyFunction,
 			addTextArea = emptyFunction,
 			removeTextArea = emptyFunction,
+			setBackgroundColor = emptyFunction,
 			setMapName = emptyFunction,
 			setShamanName = emptyFunction,
 			showColorPicker = emptyFunction,
@@ -914,6 +922,7 @@ do
 		-- Events
 		eventChatCommand = emptyFunction,
 		eventChatMessage = emptyFunction,
+		eventContactListener = emptyFunction,
 		eventEmotePlayed = emptyFunction,
 		eventFileLoaded = emptyFunction,
 		eventFileSaved = emptyFunction,
@@ -941,7 +950,7 @@ do
 
 	envTfm.bit32.lrotate = emptyFunction
 	envTfm.bit32.rrotate = emptyFunction
-	envTfm.tfm.get.room.playerList["Pikashu#0001"] = envTfm.tfm.get.room.playerList["Tigrounette#0001"]
+	envTfm.tfm.get.room.playerList["Pikashu#0095"] = envTfm.tfm.get.room.playerList["Tigrounette#0001"]
 	envTfm._G = envTfm
 end
 --[[Doc
@@ -1589,7 +1598,8 @@ local hasPermission = function(permission, member, message)
 		end
 		return false
 	elseif permission == permissions.is_module then
-		return member:hasRole(roles["module team"])
+		return member:hasRole(roles["module team"]) or (member.guild.id == "897638804750471169" and
+			member:hasRole("897640614387134534"))
 	elseif permission == permissions.is_dev then
 		return member:hasRole(roles["developer"])
 	elseif permission == permissions.is_art then
@@ -1708,10 +1718,16 @@ normalizeDiscriminator = function(discriminator)
 	return #discriminator > 5 and (string.gsub(discriminator, "#%d%d%d%d", normalizeDiscriminator, 1)) or (discriminator == "#0000" and '' or "`" .. discriminator .. "`")
 end
 
-local addServerActivity = function(x, sub)
+local addServerActivity = function(x, sub, guild)
+	local activity = serverActivity[guild]
+	if not activity then
+		serverActivity[guild] = { }
+		activity = serverActivity[guild]
+	end
+
 	local today = os.date("%d/%m/%Y")
-	if not serverActivity[today] then
-		serverActivity[today] = {
+	if not activity[today] then
+		activity[today] = {
 			l = { }, -- Member logs
 			c = { 0, 0 }, -- Counter
 			b = { 0, 0 }, -- Commands
@@ -1724,13 +1740,13 @@ local addServerActivity = function(x, sub)
 	local tx = type(x)
 	if tx == "boolean" then -- Command [true = bot, false = global]
 		local id = (x and 1 or 2)
-		serverActivity[today].b[id] = serverActivity[today].b[id] + sub
+		activity[today].b[id] = activity[today].b[id] + sub
 	elseif tx == "number" then -- New/Leave Members
-		serverActivity[today].m[x] = serverActivity[today].m[x] + sub
+		activity[today].m[x] = activity[today].m[x] + sub
 	elseif x then -- Tbl
-		serverActivity[today].l[x.id] = true -- Thinking
+		activity[today].l[x.id] = true -- Thinking
 		local id = (hasPermission(permissions.has_power, x) and 2 or 1)
-		serverActivity[today].c[id] = serverActivity[today].c[id] + sub
+		activity[today].c[id] = activity[today].c[id] + sub
 	end
 end
 
@@ -2010,8 +2026,8 @@ end
 	"Gets the Lua environment that is shared between Admins and Developers."
 	>table
 ]]
-local getLuaEnv = function()
-	return {
+local getLuaEnv = function(extra)
+	local env = {
 		activeChannels = table.copy(activeChannels),
 		activeMembers = table.copy(activeMembers),
 		authIds = table.copy(authIds),
@@ -2088,11 +2104,25 @@ local getLuaEnv = function()
 
 		validPattern = validPattern,
 	}
+
+	if extra then
+		env.coroutine = { wrap = coroutine.wrap, running = coroutine.running, status = coroutine.status, create = coroutine.create, resume = coroutine.resume }
+		env.json = { encode = json.encode, decode = json.decode }
+		env.os = { clock = os.clock, date = os.date, difftime = os.difftime, time = os.time }
+		env.getImageDimensions = imageHandler.getDimensions
+	end
+
+	return env
+end
+
+local getRandomTmpName = function()
+	return string.sub(os.tmpname(), -9)
+	--return "_" .. math.random(99999)
 end
 
 local getTimerName = function(id)
 	if not timeNames[id] then
-		timeNames[id] = string.sub(os.tmpname(), 9)
+		timeNames[id] = getRandomTmpName()
 	end
 	return timeNames[id]
 end
@@ -2101,17 +2131,62 @@ local runtimeLimitByMember = function(member)
 	return ((member.id == client.owner.id and 60) or (hasPermission(permissions.is_module, member) and 10) or 5)
 end
 
-local addRuntimeLimit = function(parameters, message, timerNameUserId)
-	local func = string.sub(os.tmpname(), 9)
+local addRuntimeLimit = function(parameters, message, timerNameUserId, maximumMemoryUsage)
+	local func = getRandomTmpName()
 	local snippet = func .. "() "
 
 	local loads = { }
-	for posini, posend in string.gmatch(parameters, "discord[\n\r ]*%.[\n\r ]*load[\n\r ]*()%b()()") do -- It's ignored so that the function can be called in discord.load itself
-		loads[#loads + 1] = { posini + 1, posend - 1 }
-	end
+	--for posini, posend in string.gmatch(parameters, "discord[\n\r ]*%.[\n\r ]*load[\n\r ]*()%b()()") do -- It's ignored so that the function can be called in discord.load itself
+	--	loads[#loads + 1] = { posini + 1, posend - 1 }
+	--end
+
+	-- Remove comments
+	--parameters = string.gsub(parameters, "%-%-%[(=*)%[.-%]%1%]", '')
+	--parameters = string.gsub(parameters, "%-%-[^\n]*", '')
+
+	-- Unescape strings
+	--local escapeStrings = {
+	--	["\\\""] = "\\\\34",
+	--	["\\'"] = "\\\\39",
+	--}
+	--for escaped, unescaped in next, escapeStrings do
+	--	parameters = string.gsub(parameters, escaped, unescaped)
+	--end
+
+	---escapeStrings["%["] = "\\\\91"
+	---escapeStrings["%]"] = "\\\\93"
+	---local expect = "["
+	---parameters = string.gsub(parameters, "(([%[%]])(=*)%2)", function(raw, char, eq)
+	---	if char == expect then
+	---		expect = expect == "[" and "]" or "["
+	---		return raw
+	---	else
+	---		local this = escapeStrings["%" .. char]
+	---		return this .. eq .. this
+	---	end
+	---end)
+
+	--local strings = { }
+	--for _, pattern in next, {
+	--	"%b\"\"",
+	--	"%b''",
+	--	"(%[(=*)%[.-%]%2%])",
+	--} do
+	--	parameters = string.gsub(parameters, pattern, function(str)
+	--		local name = getRandomTmpName()
+	--		strings[name] = str:gsub("[%(%)%.%%%+%-%*%?%[%]%^%$]", "%%%0")
+	--		return name
+	--	end)
+	--end
 
 	local hasChanged, change = false
-	for _, pattern in next, { "()(%f[%w%p]while.-do[\n\r ]+)", "()(%f[%w%p]repeat[\n\r ]+)", "()(%f[%w%p]for .-=.- do[\n\r ]+)", "()(%f[%w%p]for .- in .- do[\n\r ]+)", "()(%f[%w%p]function[\n\r ]*%S-[\n\r ]-%(.-%)[\n\r ]+)" } do
+	for _, pattern in next, {
+		"()(%f[%w%p]while.-do[\n\r ]+)",
+		"()(%f[%w%p]repeat[\n\r ]+)",
+		"()(%f[%w%p]for .-=.- do[\n\r ]+)",
+		"()(%f[%w%p]for .- in .- do[\n\r ]+)",
+		"()(%f[%w%p]function[\n\r ]*%S-[\n\r ]-%(.-%)[\n\r ]+)"
+	} do
 		parameters, change = string.gsub(parameters, pattern, function(pos, chunk)
 			for i = 1, #loads do
 				if (loads[i][1] < pos and loads[i][2] > pos) then
@@ -2125,10 +2200,19 @@ local addRuntimeLimit = function(parameters, message, timerNameUserId)
 		end
 	end
 
+	-- Escape strings
+	--for escaped, unescaped in next, escapeStrings do
+	--	parameters = string.gsub(parameters, unescaped, escaped)
+	--end
+	--for k, v in next, strings do
+	--	parameters = string.gsub(parameters, k, v)
+	--end
+
 	if hasChanged then
 		local member = message.member or client:getGuild(channels["guild"]):getMember(message.author.id)
 		local s = runtimeLimitByMember(member)
-		parameters = "local " .. func .. " do local t,e,m,ts=os.time,error,\"Your code has exceeded the runtime limit of " .. s .. "s.\",tostring " .. func .. "=function() if t()>" .. getTimerName(timerNameUserId or message.author.id) .. " then e(ts(m),2) end end end " .. parameters
+		parameters = "local " .. func .. " do local t,e,g,s,m=os.time,error,collectgarbage,tostring,\"Your code has exceeded the runtime limit of " .. s .. "s or the memory usage has exceeded (" .. maximumMemoryUsage .. ").\"" ..
+			func .. "=function() if t()>" .. getTimerName(timerNameUserId or message.author.id) .. " or g(\"count\")>" .. maximumMemoryUsage .. " then g() e(s(m),2) end end end " .. parameters
 		return parameters, s
 	end
 
@@ -2137,9 +2221,13 @@ end
 
 local postNewBreaches = function()
 	local breach = client:getChannel(channels["breach"])
+	assert(breach, tostring(breach))
 
 	local lastBreaches = { }
-	for msg in breach:getMessages(10):iter() do
+	local ten, err = breach:getMessages(10)
+	assert(ten, tostring(err))
+
+	for msg in ten:iter() do
 		lastBreaches[msg.embed.thumbnail.url] = true
 	end
 
@@ -2341,8 +2429,8 @@ commands["activity"] = {
 	auth = permissions.public,
 	description = "Displays the channels' and members' activity.",
 	f = function(message, _, __, ___, get)
-		local cachedChannels, loggedMessages = sortActivityTable(activeChannels, function(id) return not client:getChannel(id) end)
-		local cachedMembers, loggedMemberMessages = sortActivityTable(activeMembers, function(id) return not message.guild:getMember(id) end)
+		local cachedChannels, loggedMessages = sortActivityTable(activeChannels[message.guild.id], function(id) return not client:getChannel(id) end)
+		local cachedMembers, loggedMemberMessages = sortActivityTable(activeMembers[message.guild.id], function(id) return not message.guild:getMember(id) end)
 
 		local members = concat(cachedMembers, "\n", function(index, value)
 			local member = message.guild:getMember(value[1])
@@ -2383,6 +2471,7 @@ commands["adoc"] = {
 	auth = permissions.public,
 	description = "Gets information about a specific tfm api function.",
 	f = function(message, parameters)
+		--[==[
 		if parameters and #parameters > 0 then
 			local head, body = http.request("GET", "https://atelier801.com/topic?f=612619&t=934783")
 
@@ -2391,7 +2480,7 @@ commands["adoc"] = {
 				local _, init = string.find(body, "id=\"message_19532184\">•")
 				body = string.sub(body, init)
 
-				local syntax, description = string.match(body, "•  (%S*" .. parameters .. "%S* .-)\n(.-)\n\n\n\n")
+				local syntax, description = string.match(body, "•%s+(%S*" .. parameters .. "%S* .-)\n(.-)\n\n\n\n")
 
 				if syntax then
 					description = string.gsub(description, "&sect;", "§")
@@ -2473,6 +2562,66 @@ commands["adoc"] = {
 		else
 			sendError(message, "ADOC", "Invalid or missing parameters.", "Use `!adoc function_name`.")
 		end
+		]==]
+
+		parameters = tostring(parameters)
+
+		local object
+		for name, data in next, luaDoc do
+			if name:find(parameters, 1, true) then
+				object = data
+				break
+			end
+		end
+		if not object then
+			toDelete[message.id] = message:reply({
+				content = "<@!" .. message.author.id .. ">",
+				embed = {
+					color = color.lua,
+					title = "<:atelier:458403092417740824> TFM API Documentation",
+					description = "The function **" .. parameters .. "** was not found in the documentation."
+				}
+			})
+			return
+		end
+
+		local parameter = { }
+		if object.parameters then
+			local parameters = object.description.parameters
+			local tmp, subParameters, subCounter = { }
+			for i = 1, #parameters do
+				tmp = parameters[i]
+
+				subCounter = 0
+				subParameters = { }
+
+				for t = 1, #tmp do
+					subCounter = subCounter + 1
+					subParameters[subCounter] = string.format("`%s` **%s**", tmp[t].type, tmp[t].name)
+				end
+
+				parameter[i] = string.format("%s → %s%s", table.concat(subParameters, ", "), tmp.description,
+					(tmp.default and ( " (default value = " .. tmp.default .. ")" ) or ""))
+			end
+			parameter = table.concat(parameter, "\n")
+		end
+
+		toDelete[message.id] = message:reply({
+			embed = {
+				color = color.lua,
+				title = string.format("<:atelier:458403092417740824> %s ( %s )", object.name, (object.parameters and table.concat(object.parameters, ", ") or '')),
+				description = object.description.content ..
+					(object.parameters and
+						("\n\n**Arguments / Parameters**\n" .. parameter)
+					or "") ..
+					(object.description.returns and
+						string.format("\n\n**Returns**\n`%s` : %s", object.description.returns.type, object.description.returns.description)
+					or ""),
+				footer = {
+					text = "TFM API Documentation"
+				}
+			}
+		})
 	end
 }
 --[[commands["akinator"] = {
@@ -3427,8 +3576,9 @@ commands["profile"] = {
 			}
 		end
 
-		if activeMembers[p.discord.id] then
-			local cachedMembers, loggedMemberMessages = sortActivityTable(activeMembers, function(id) return not message.guild:getMember(id) end)
+		local activity = activeMembers[message.guild.id]
+		if activity and activity[p.discord.id] then
+			local cachedMembers, loggedMemberMessages = sortActivityTable(activity, function(id) return not message.guild:getMember(id) end)
 			local _, o = table.find(cachedMembers, p.discord.id, 1)
 
 			if o then
@@ -3770,7 +3920,7 @@ commands["tfmprofile"] = {
 					end
 				end
 
-				body.id_gender = body.gender == "male" and 2 or body.gender == "female" and 1
+				body.id_gender = body.gender == "female" and 1 or 2
 
 				local playerTitle = title[title._id[body.title * 1]].name
 				if type(playerTitle) == "table" then
@@ -4406,7 +4556,7 @@ commands["lua"] = {
 			local repliedMessages = {}
 
 			local guild = message.guild or client:getGuild(channels["guild"])
-			local _ENV = getLuaEnv()
+			local _ENV = getLuaEnv(not hasAuth)
 			local ENV = (hasAuth and devENV or moduleENV) + _ENV
 			if compEnv then
 				-- parameters
@@ -4610,10 +4760,11 @@ commands["lua"] = {
 				@src string
 				>function
 			]]
+			local maximumMemoryUsage = collectgarbage("count") + 2000
 			ENV.discord.load = function(src)
 				assert(src, "Source can't be nil in discord.load")
 
-				return load(addRuntimeLimit(src, message), '', 't', ENV)
+				return load(addRuntimeLimit(src, message, nil, maximumMemoryUsage), '', 't', ENV)
 			end
 			--[[Doc
 				"The time, in minutes, since the last bot reboot"
@@ -4681,7 +4832,7 @@ commands["lua"] = {
 			if isTest ~= debugAction.test then
 				local timerNameUserId, limSeconds = message.author.id--(isTest == debugAction.cmd and getOwner(message) or message.author.id)
 				if not hasAuth then
-					parameters, limSeconds = addRuntimeLimit(parameters, message, timerNameUserId)
+					parameters, limSeconds = addRuntimeLimit(parameters, message, timerNameUserId, maximumMemoryUsage)
 				end
 
 				ENV[getTimerName(timerNameUserId)] = os.time() + (limSeconds or runtimeLimitByMember(message.member or guild:getMember(message.author.id)))
@@ -4782,6 +4933,39 @@ commands["lua"] = {
 
 				local member = guild:getMember(memberId)
 				return member and member.name
+			end
+
+			ENV.discord.getMemberRoles = function(memberId)
+				assert(memberId, "Member ID can't be nil in discord.getMemberRoles")
+				memberId = tostring(memberId)
+
+				local member = guild:getMember(memberId)
+				if not member then return end
+
+				return table.createSet(member.roles[1])
+			end
+
+			ENV.discord.getNicknamesFromMemberNamesChannel = function(channelId)
+				assert(channelId, "Channel ID can't be nil in discord.getNicknamesFromMemberNamesChannel")
+				channelId = tostring(channelId)
+
+				local channel = message.guild:getChannel(channelId)
+				if not channel then return end
+
+				assert(channel.name == "member_names", "discord.getNicknamesFromMemberNamesChannel can only look for channels named member_names")
+
+				local messages = channel:getMessages(100)
+				local names = { }
+
+				local tmpId, tmpNickname
+				for message in messages:iter() do
+					tmpId, tmpNickname = message.content:match("^<@!?(%d+)> *= *(%S+)")
+					if tmpId then
+						names[tmpId] = message.content:match(tmpNickname)
+					end
+				end
+
+				return names
 			end
 
 			ENV.discord.isMember = function(userId)
@@ -5790,6 +5974,8 @@ commands["resetactivity"] = {
 	end
 }
 
+commands["lu"]=commands["lua"]
+
 --[[ Channel Behaviors ]]--
 channelBehavior["bridge"] = {
 	output = true,
@@ -6477,6 +6663,13 @@ local TRY_REQUEST = function(db, arg1, arg2)
 	return content
 end
 
+local wrapF = function(f)
+	return function(...)
+		return f(...)
+	end
+end
+
+
 --[[ Events ]]--
 client:on("ready", function()
 	modules = TRY_REQUEST("serverModulesData", false, true)
@@ -6488,6 +6681,7 @@ client:on("ready", function()
 	serverActivity = TRY_REQUEST("serverActivity")
 	db_teamList = TRY_REQUEST("teamList")
 	db_modules = TRY_REQUEST("modules")
+	luaDoc = TRY_REQUEST("luaDoc")
 	-- Normalize string indexes ^
 	for k, v in next, table.copy(memberProfiles) do
 		for i, j in next, v do
@@ -6495,6 +6689,18 @@ client:on("ready", function()
 			if m then
 				memberProfiles[k][m] = j
 				memberProfiles[k][i] = j
+			end
+		end
+	end
+	for k, v in next, table.copy(luaDoc) do
+		if v.description.parameters then
+			for m, n in next, v.description.parameters do
+				for i, j in next, n do
+					if tonumber(i) then
+						luaDoc[k].description.parameters[m][i] = nil
+						luaDoc[k].description.parameters[m][tonumber(i)] = j
+					end
+				end
 			end
 		end
 	end
@@ -6519,13 +6725,7 @@ client:on("ready", function()
 
 	moduleENV = setmetatable({}, {
 		__index = setmetatable({
-			coroutine = { wrap = coroutine.wrap, running = coroutine.running, status = coroutine.status, create = coroutine.create, resume = coroutine.resume },
 
-			json = { encode = json.encode, decode = json.decode },
-
-			os = { clock = os.clock, date = os.date, difftime = os.difftime, time = os.time },
-
-			getImageDimensions = imageHandler.getDimensions
 		}, {
 			__index = restricted_Gmodule
 		}),
@@ -6595,7 +6795,9 @@ client:on("ready", function()
 			DB_COOKIES_N_BLAME_INFINITYFREE = DB_COOKIES_N_BLAME_INFINITYFREE,
 			db_url = db_url,
 
-			getImageDimensions = imageHandler.getDimensions
+			getImageDimensions = imageHandler.getDimensions,
+
+			luaDoc = luaDoc
 		}, {
 			__index = restricted_G
 		}),
@@ -6629,12 +6831,10 @@ client:on("ready", function()
 		titleName = string.gsub(titleName, "<.->", '') -- Removes HTML
 		titleName = string.gsub(titleName, "[%*%_~]", "\\%1") -- Escape special characters
 		if string.find(titleName, '|', nil, true) then -- Male / Female
-			---- Male version
-			--male = string.gsub(titleName, "%((.-)|.-%)", function(s) return s end)
-			---- Female version
-			--female = string.gsub(titleName, "%(.-|(.-)%)", function(s) return s end)
-			male, female = string.match(titleName, "%((.-)|(.-)%)")
-			titleName = { male, female } -- id % 2 + 1
+			titleName = {
+				(string.gsub(titleName, "%((.-)|.-%)", "%1")),
+				(string.gsub(titleName, "%(.-|(.-)%)", "%1")),
+			} -- id % 2 + 1
 		end
 		counter = counter + 1
 		title[counter] = { id = titleId, name = titleName }
@@ -6767,11 +6967,13 @@ messageCreate = function(message, skipChannelActivity)
 			end
 
 			if can < 3 and not string.find(message.channel.name, "^prj_") then
-				if not activeChannels[message.channel.id] then
-					activeChannels[message.channel.id] = 1
-				else
-					activeChannels[message.channel.id] = activeChannels[message.channel.id] + 1
+				local activity = activeChannels[message.guild.id]
+				if not activity then
+					activeChannels[message.guild.id] = { }
+					activity = activeChannels[message.guild.id]
 				end
+
+				activity[message.channel.id] = (activity[message.channel.id] or 0) + 1
 			end
 
 			if not memberTimers[message.author.id] then
@@ -6779,13 +6981,16 @@ messageCreate = function(message, skipChannelActivity)
 			end
 			if os.time() > memberTimers[message.author.id] then
 				memberTimers[message.author.id] = os.time() + 3
-				if not activeMembers[message.author.id] then
-					activeMembers[message.author.id] = 1
-				else
-					activeMembers[message.author.id] = activeMembers[message.author.id] + 1
+
+				local activity = activeMembers[message.guild.id]
+				if not activity then
+					activeMembers[message.guild.id] = { }
+					activity = activeMembers[message.guild.id]
 				end
 
-				addServerActivity(message.member)
+				activity[message.author.id] = (activity[message.author.id] or 0) + 1
+
+				addServerActivity(message.member, nil, message.guild.id)
 			end
 		end
 		return
@@ -6834,7 +7039,7 @@ messageCreate = function(message, skipChannelActivity)
 		end
 
 		if message.channel.type ~= 1 then
-			addServerActivity(not not botCommand)
+			addServerActivity(not not botCommand, nil, message.guild.id)
 		end
 
 		if botCommand then
@@ -6845,7 +7050,7 @@ messageCreate = function(message, skipChannelActivity)
 	end
 end
 messageDelete = function(message, skipChannelActivity)
-	if not message.guild or message.guild.id ~= channels["guild"] then return end
+	if not message.guild or (message.guild.id ~= channels["guild"] and message.guild.id ~= '897638804750471169') then return end
 
 	if toDelete[message.id] then
 		message.channel:bulkDelete(toDelete[message.id])
@@ -6855,12 +7060,15 @@ messageDelete = function(message, skipChannelActivity)
 		local t = discordia.Date.fromISO(message.timestamp):toSeconds()
 		-- Less than 1 minute = remove activity
 		if (os.time() - 60) < t then
-			if activeChannels[message.channel.id] and activeChannels[message.channel.id] > 0 then
-				activeChannels[message.channel.id] = activeChannels[message.channel.id] - 1
+			local activity = activeChannels[message.guild.id]
+			if activity and activity[message.channel.id] and activity[message.channel.id] > 0 then
+				activity[message.channel.id] = activity[message.channel.id] - 1
 			end
-			if activeMembers[message.author.id] and activeMembers[message.author.id] > 0 then
-				activeMembers[message.author.id] = activeMembers[message.author.id] - 1
-				addServerActivity(message.member, true)
+
+			local activity = activeMembers[message.guild.id]
+			if activity and activity[message.author.id] and activity[message.author.id] > 0 then
+				activity[message.author.id] = activity[message.author.id] - 1
+				addServerActivity(message.member, true, message.guild.id)
 			end
 		end
 		-- Less than 20 seconds = log
@@ -6950,7 +7158,7 @@ local memberJoin = function(member)
 		client:getChannel("472958910475665409"):send(string.format(client:getChannel(channels["greetings"]):getMessages(100):random().content, "<@" .. member.id .. ">"))
 	end
 
-	addServerActivity(1)
+	addServerActivity(1, nil, member.guild.id)
 end
 local memberLeave = function(member)
 	client:getChannel(channels["logs"]):send({
@@ -6958,13 +7166,14 @@ local memberLeave = function(member)
 		allowed_mentions = { parse = { "users" } }
 	})
 
-	if activeMembers[member.id] then
+	local activity = activeMembers[member.guild]
+	if activity and activity[member.id] then
 		activeMembers[member.id] = nil
 	end
 	if memberProfiles[member.id] then
 		memberProfiles[member.id] = nil
 	end
-	addServerActivity(2)
+	addServerActivity(2, nil, member.guild.id)
 end
 client:on("memberJoin", function(member)
 	if member.guild.id ~= channels["guild"] then return end
@@ -7138,8 +7347,9 @@ client:on("reactionRemove", function(reaction, userId)
 end)
 
 local channelDelete = function(channel)
-	if activeChannels[channel.id] then
-		activeChannels[channel.id] = nil
+	local activity = activeChannels[channel.guild.id]
+	if activity[channel.id] then
+		activity[channel.id] = nil
 	end
 end
 client:on("channelDelete", function(channel)
