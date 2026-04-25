@@ -1,4 +1,8 @@
 local db_url = "http://127.0.0.1/"--"https://d-modulo-b-2.000webhostapp.com/"
+local db_path = ("C:/Users/tai/Desktop/discord/server/discorddb.000webhostapp.com" or "../db") .. "/public_html/files/"
+local backup_path = ("C:/Users/tai/Desktop/discord/server/discorddb.000webhostapp.com" or "../db") .. "/public_html/backups/"
+
+local pigEmoji = "\xF0\x9F\x87\xAE\xF0\x9F\x87\xB1"
 
 math.randomseed(os.time())
 local DB_COOKIES_N_BLAME_INFINITYFREE
@@ -43,6 +47,7 @@ local minutes = 0
 local http = require("coro-http")
 local json = require("json")
 local timer = require("timer")
+local uv_hrtime = require("uv").hrtime
 
 local base64 = require("Content/base64")
 local binBase64 = require("Content/binBase64")
@@ -138,7 +143,8 @@ local channels = {
 	["polls"] = "595364384566673413",
 	["role-log"] = "598894097419337755",
 	["greetings"] = "598898246500483072",
-	["breach"] = "718659508980809758"
+	["breach"] = "718659508980809758",
+  ["games"] = "574279126073212928",
 }
 
 local botIds = {
@@ -230,7 +236,6 @@ local countryFlags = {
 	FI = "\xF0\x9F\x87\xAB\xF0\x9F\x87\xAE",
 	FR = "\xF0\x9F\x87\xAB\xF0\x9F\x87\xB7",
 	GR = "\xF0\x9F\x87\xAC\xF0\x9F\x87\xB7",
-	HE = "\xF0\x9F\x87\xAE\xF0\x9F\x87\xB1",
 	HR = "\xF0\x9F\x87\xAD\xF0\x9F\x87\xB7",
 	HU = "\xF0\x9F\x87\xAD\xF0\x9F\x87\xBA",
 	ID = "\xF0\x9F\x87\xAE\xF0\x9F\x87\xA9",
@@ -249,14 +254,13 @@ local countryFlags = {
 }
 countryFlags.PT = countryFlags.BR
 countryFlags.GB = countryFlags.EN
-countryFlags.IL = countryFlags.HE
 countryFlags.JA = countryFlags.JP
 countryFlags.SA = countryFlags.AR
 --[[Doc
 	"Flags of aliases of country codes for **countryFlags**' reference."
 	!table
 ]]
-local countryFlags_Aliases = { PT = "BR", JA = "JP", IL = "HE", GB = "EN", SA = "AR" }
+local countryFlags_Aliases = { PT = "BR", JA = "JP", GB = "EN", SA = "AR" }
 -- Sorry please
 local communities = {
 	["br"] = "\xF0\x9F\x87\xA7\xF0\x9F\x87\xB7",
@@ -323,7 +327,8 @@ local permissions = discordia.enums.enum {
 	--is_shades = 12,
 	--is_staff = 13, -- Never change
 	--is_owner = 14,
-	is_mod = 15
+	is_mod = 15,
+	is_admin = 16,
 }
 
 local permIcons = {
@@ -342,7 +347,8 @@ local permIcons = {
 	--is_shades = "<:illuminati:542115872328646666>",
 	--is_staff = ":star:",
 	--is_owner = ":star2:",
-	is_mod = ":hammer_pick:"
+	is_mod = ":hammer_pick:",
+	is_admin = ":cake:",
 }
 
 --[[Doc
@@ -450,16 +456,16 @@ local roleColor = {
 	!table
 ]]
 local specialRoleColor = discordia.enums.enum {
-	--["462279926532276225"] = "530765845480210462", -- mt
+	["462279926532276225"] = "530765845480210462", -- mt
 	["462281046566895636"] = "530765846470066186", -- dev
 	["462285151595003914"] = "530765853340467210", -- art
 	["494665355327832064"] = "530765852296085524", -- trad
-	--["462329326600192010"] = "530765854174871553", -- map
-	--["481189370448314369"] = "530765850186219550", -- evt
-	--["544202727216119860"] = "544204980706476053", -- sh
-	--["526822896987930625"] = "530765847816568832", -- fc
+	["462329326600192010"] = "530765854174871553", -- map
+	["481189370448314369"] = "530765850186219550", -- evt
+	["544202727216119860"] = "544204980706476053", -- sh
+	["526822896987930625"] = "530765847816568832", -- fc
 	["514913541627838464"] = "530765851314356236", -- math
-	--["465631506489016321"] = "530765844406599680", -- fashion
+	["465631506489016321"] = "530765844406599680", -- fashion
 	["514913155437035551"] = "530765848823201792" -- write
 }
 --[[Doc
@@ -974,6 +980,905 @@ local token_whitelist = {
 	imgur = "https://i?%.?imgur.com/",
 	math = "https://math%.p%.mashape%.com/image"
 }
+
+local reminders = {}
+
+-- Docs
+local luaDoc
+
+local envDocs = {
+	_G = {},
+	discord = {},
+	math = {},
+	os = {},
+	string = {},
+	table = {},
+}
+
+local doc = function(ns, name, t)
+	if not envDocs[ns] then
+		error("ns " .. tostring(ns) .. " does not exist")
+	end
+	if envDocs[ns][name] then
+		error(ns .. "." .. name .. " already exists")
+	end
+	envDocs[ns][name] = t
+end
+
+doc("_G", "print", {
+	description = "Prints values to the Lua output buffer.",
+	params = { { name = "...", type = "*" } }
+})
+
+doc("_G", "printt", {
+	description = "Pretty-prints a table.",
+	params = {
+		{ name = "value", type = "table" },
+		{ name = "stop", type = "number?" }
+	}
+})
+
+doc("_G", "getTime", {
+	description = "Minutes since the last bot reboot.",
+	returns = "int"
+})
+
+doc("_G", "getImage", {
+	description = "Downloads an image from a URL and returns its internal identifier.",
+	params = { { name = "url", type = "string" } },
+	auth = permissions.is_module
+})
+
+doc("_G", "test", {
+	description = "Runs the internal test helper and prints its output.",
+	params = { { name = "...", type = "*" } },
+})
+
+doc("discord", "authorId", {
+	description = "ID of the user who ran !lua.",
+	type = "string|int"
+})
+
+doc("discord", "authorName", {
+	description = "Username of the user who ran !lua.",
+	type = "string"
+})
+
+doc("discord", "messageId", {
+	description = "Message ID of the Lua script.",
+	type = "string|int"
+})
+
+doc("discord", "message", {
+	description = "Wrapped Discord message object for the Lua script message.",
+	type = "Message",
+	returns = "table { id, createdAt, timestamp, editedTimestamp?, content, cleanContent, oldContent?, link, isDM, mentionsEveryone, attachment?, attachments, author { id, name, username, discriminator, tag, fullname, mentionString, avatar?, avatarURL, defaultAvatar, defaultAvatarURL, createdAt, timestamp }, member? { status, deafened, highestRole, joinedAt, muted, name, nickname? }, channel { id, name } }"
+})
+
+doc("discord", "messageContent", {
+	description = "Raw message content of the command.",
+	type = "string"
+})
+
+doc("discord", "channel", {
+	description = "Channel where the Lua command was executed.",
+	type = "GuildTextChannel",
+	returns = "table { id, name }"
+})
+
+doc("discord", "lastMessage", {
+	description = "Returns the last message sent before the command.",
+	returns = "table { content, authorId, authorName }"
+})
+
+doc("discord", "reply", {
+	description = "Replies in the channel where the command was executed.",
+	params = { { name = "text", type = "string|table" } },
+	returns = "string|int|boolean"
+})
+
+doc("discord", "editMessage", {
+	description = "Edits a bot message sent in the last 3 minutes.",
+	params = {
+		{ name = "messageId", type = "string|int" },
+		{ name = "content", type = "table" }
+	},
+	returns = "string|int"
+})
+
+doc("discord", "delete", {
+	description = "Deletes a bot message sent in the last 3 minutes.",
+	params = { { name = "messageId", type = "string|int" } }
+})
+
+doc("discord", "sendError", {
+	description = "Sends a formatted error embed in the channel.",
+	params = {
+		{ name = "command", type = "string" },
+		{ name = "err", type = "string" },
+		{ name = "description", type = "string?" }
+	}
+})
+
+doc("discord", "http", {
+	description = "Performs an HTTP request. Prefix URL with !, *, or @ to change method to POST, DELETE, PATCH respectively.",
+	params = {
+		{ name = "url", type = "string" },
+		{ name = "headers", type = "table?" },
+		{ name = "body", type = "string?" },
+		{ name = "token", type = "string|table?" }
+	},
+	returns = "table, string",
+})
+
+doc("discord", "load", {
+	description = "Loads Lua source code inside the sandboxed environment.",
+	params = { { name = "src", type = "string" } },
+	returns = "function",
+})
+
+doc("discord", "getData", {
+	description = "Reads stored per-user data for the command owner.",
+	params = { { name = "userId", type = "string|int" } },
+	returns = "string",
+	auth = permissions.is_module
+})
+
+doc("discord", "saveData", {
+	description = "Stores per-user data (max 8000 characters).",
+	params = {
+		{ name = "userId", type = "string|int" },
+		{ name = "data", type = "string" }
+	},
+	returns = "boolean",
+	auth = permissions.is_module
+})
+
+doc("discord", "getAllMembers", {
+	description = "Returns member IDs that match a predicate function.",
+	params = { { name = "filter", type = "function(memberId) -> boolean" } },
+	returns = "table, int",
+	auth = permissions.is_module
+})
+
+doc("discord", "addReaction", {
+	description = "Adds a reaction to a recent message.",
+	params = {
+		{ name = "messageId", type = "string|int" },
+		{ name = "reaction", type = "string" }
+	},
+	returns = "boolean"
+})
+
+doc("discord", "retrieveReactions", {
+	description = "Returns all reactions and reacting member IDs from a message.",
+	params = { { name = "messageId", type = "string|int" } },
+	returns = "table"
+})
+
+doc("discord", "getMemberId", {
+	description = "Finds a guild member ID by username.",
+	params = { { name = "memberName", type = "string" } },
+	returns = "string|nil"
+})
+
+doc("discord", "getMemberName", {
+	description = "Returns a guild member name from an ID.",
+	params = { { name = "memberId", type = "string|int" } },
+	returns = "string|nil"
+})
+
+doc("discord", "getMemberRoles", {
+	description = "Returns a set of role IDs for a member.",
+	params = { { name = "memberId", type = "string|int" } },
+	returns = "table",
+})
+
+doc("discord", "getNicknamesFromMemberNamesChannel", {
+	description = "Reads nicknames from a `member_names` channel.",
+	params = {
+		{ name = "channelId", type = "string|int" }
+	},
+	returns = "table { [userId] = nickname }"
+})
+
+doc("discord", "isMember", {
+	description = "Checks whether a user is a member of the current guild.",
+	params = {
+		{ name = "userId", type = "string|int" }
+	},
+	returns = "boolean"
+})
+
+doc("discord", "sendPrivateMessage", {
+	description = "Sends a private message. Sending to other users requires permission.",
+	params = {
+		{ name = "content", type = "string|table" },
+		{ name = "userId", type = "string|int?" }
+	},
+	returns = "string|int",
+})
+
+doc("discord", "getPinnedMessages", {
+	description = "Gets all pinned messages from a channel.",
+	params = {
+		{ name = "channelId", type = "string|int" }
+	},
+	returns = "table { id, createdAt, timestamp, editedTimestamp?, content, cleanContent, oldContent?, link, isDM, mentionsEveryone, attachment?, attachments, author { id, name, username, discriminator, tag, fullname, mentionString, avatar?, avatarURL, defaultAvatar, defaultAvatarURL, createdAt, timestamp }, member? { status, deafened, highestRole, joinedAt, muted, name, nickname? }, channel { id, name } }[]"
+})
+
+doc("discord", "yield", {
+	description = "Yields the current coroutine. Cannot be called from the main thread.",
+	params = {
+		{ name = "...", type = "*" }
+	},
+	returns = "*"
+})
+
+doc("discord", "waitForEvent", {
+	description = "Waits for a mapped Discord event.",
+	params = {
+		{ name = "eventName", type = "string" },
+		{ name = "timeout", type = "int?" }
+	},
+	auth = permissions.is_module
+})
+
+doc("discord", "getMessage", {
+	description = "Gets a message from a channel by ID.",
+	params = {
+		{ name = "channelId", type = "string|int" },
+		{ name = "messageId", type = "string|int" }
+	},
+	returns = "table|nil { id, createdAt, timestamp, editedTimestamp?, content, cleanContent, oldContent?, link, isDM, mentionsEveryone, attachment?, attachments, author { id, name, username, discriminator, tag, fullname, mentionString, avatar?, avatarURL, defaultAvatar, defaultAvatarURL, createdAt, timestamp }, member? { status, deafened, highestRole, joinedAt, muted, name, nickname? }, channel { id, name } }"
+})
+
+doc("_G", "getmetatable", {
+	description = "Returns the metatable of a value. Access is restricted for strings.",
+	params = {
+		{ name = "x", type = "*" }
+	},
+	returns = "table|string|nil"
+})
+
+doc("_G", "setmetatable", {
+	description = "Sets the metatable for a value. Certain targets are protected.",
+	params = {
+		{ name = "x", type = "*" },
+		{ name = "m", type = "table" }
+	},
+	returns = "table|string"
+})
+
+doc("_G", "activeChannels", {
+	description = "Set of currently active channels.",
+	type = "table"
+})
+
+doc("_G", "activeMembers", {
+	description = "Set of currently active members.",
+	type = "table"
+})
+
+doc("_G", "authIds", {
+	description = "Map of admin user IDs.",
+	type = "table",
+})
+
+doc("_G", "categories", {
+	description = "Registered command categories.",
+	type = "table"
+})
+
+doc("_G", "channels", {
+	description = "Channel ID mappings.",
+	type = "table"
+})
+
+doc("_G", "color", {
+	description = "Color constants used by embeds and UI.",
+	type = "table"
+})
+
+doc("_G", "countryFlags", {
+	description = "Country code to flag emoji mapping.",
+	type = "table"
+})
+
+doc("_G", "countryFlags_Aliases", {
+	description = "Aliases for country flag codes.",
+	type = "table"
+})
+
+doc("_G", "debugAction", {
+	description = "Debug action constants.",
+	type = "table",
+})
+
+doc("_G", "devRestrictions", {
+	description = "Developer restriction configuration.",
+	type = "table",
+})
+
+doc("_G", "globalCommands", {
+	description = "Registered global commands.",
+	type = "table",
+})
+
+doc("_G", "logColor", {
+	description = "Log level color mappings.",
+	type = "table"
+})
+
+doc("_G", "memberProfiles", {
+	description = "Cached member profile data.",
+	type = "table",
+})
+
+doc("_G", "meta", {
+	description = "Metadata configuration table.",
+	type = "table"
+})
+
+doc("_G", "moduleRestrictions", {
+	description = "Module-specific restriction rules.",
+	type = "table",
+})
+
+doc("_G", "modules", {
+	description = "Loaded bot modules.",
+	type = "table",
+})
+
+doc("_G", "nickList", {
+	description = "Nickname lookup table.",
+	type = "table"
+})
+
+doc("_G", "permIcons", {
+	description = "Permission level to icon mapping.",
+	type = "table"
+})
+
+doc("_G", "permissions", {
+	description = "Permission constants.",
+	type = "table"
+})
+
+doc("_G", "permMaps", {
+	description = "Permission mapping tables.",
+	type = "table"
+})
+
+doc("_G", "profileStruct", {
+	description = "Profile data structure definition.",
+	type = "table"
+})
+
+doc("_G", "reactions", {
+	description = "Reaction configuration table.",
+	type = "table"
+})
+
+doc("_G", "roleColor", {
+	description = "Role color mappings.",
+	type = "table"
+})
+
+doc("_G", "roleFlags", {
+	description = "Role flag bitmasks.",
+	type = "table"
+})
+
+doc("_G", "roles", {
+	description = "Role ID mappings.",
+	type = "table"
+})
+
+doc("_G", "specialRoleColor", {
+	description = "Special role color overrides.",
+	type = "table"
+})
+
+doc("_G", "title", {
+	description = "Title templates and metadata.",
+	type = "table"
+})
+
+doc("_G", "math", {
+	description = "Lua math library.",
+	type = "library"
+})
+
+doc("_G", "string", {
+	description = "Lua string library.",
+	type = "library"
+})
+
+doc("_G", "table", {
+	description = "Lua table library.",
+	type = "library"
+})
+
+doc("_G", "utf8", {
+	description = "Lua UTF-8 library.",
+	type = "library"
+})
+
+doc("_G", "bit32", {
+	description = "Bitwise operations library.",
+	type = "library"
+})
+
+doc("_G", "base64", {
+	description = "Base64 encode/decode helpers.",
+	type = "library"
+})
+
+doc("_G", "binBase64", {
+	description = "Binary Base64 helpers.",
+	type = "library"
+})
+
+doc("_G", "buildMessage", {
+	description = "Builds a formatted Discord message.",
+	type = "function"
+})
+
+doc("_G", "concat", {
+	description = "Concatenates values into a string.",
+	type = "function"
+})
+
+doc("_G", "encodeUrl", {
+	description = "URL-encodes a string.",
+	type = "function"
+})
+
+doc("_G", "expToLvl", {
+	description = "Converts experience points to a level.",
+	type = "function"
+})
+
+doc("_G", "fixHtml", {
+	description = "Sanitizes or fixes HTML content.",
+	type = "function"
+})
+
+doc("_G", "getAge", {
+	description = "Calculates age from a date.",
+	type = "function"
+})
+
+doc("_G", "getCommandFormat", {
+	description = "Returns the formatted syntax for a command.",
+	type = "function"
+})
+
+doc("_G", "getCommandTable", {
+	description = "Returns the command table definition.",
+	type = "function"
+})
+
+doc("_G", "getDiscMember", {
+	description = "Gets a Discord member by ID or name.",
+	type = "function"
+})
+
+doc("_G", "getNick", {
+	description = "Returns a member nickname if available.",
+	type = "function"
+})
+
+doc("_G", "getRate", {
+	description = "Returns a rate value based on configuration.",
+	type = "function"
+})
+
+doc("_G", "hasPermission", {
+	description = "Checks whether a member has a given permission.",
+	type = "function"
+})
+
+doc("_G", "htmlToMarkdown", {
+	description = "Converts HTML into Markdown.",
+	type = "function"
+})
+
+doc("_G", "memoryLimitByMember", {
+	description = "Returns memory limits for a member.",
+	type = "function"
+})
+
+doc("_G", "moonPhase", {
+	description = "Returns the current moon phase.",
+	type = "function"
+})
+
+doc("_G", "normalizeDiscriminator", {
+	description = "Normalizes a Discord discriminator.",
+	type = "function"
+})
+
+doc("_G", "pairsByIndexes", {
+	description = "Iterates a table by sorted numeric indexes.",
+	type = "function"
+})
+
+doc("_G", "removeAccents", {
+	description = "Removes accents from a string.",
+	type = "function"
+})
+
+doc("_G", "runtimeLimitByMember", {
+	description = "Returns runtime limits for a member.",
+	type = "function"
+})
+
+doc("_G", "sortActivityTable", {
+	description = "Sorts an activity table.",
+	type = "function"
+})
+
+doc("_G", "splitByChar", {
+	description = "Splits a string by a character.",
+	type = "function"
+})
+
+doc("_G", "splitByLine", {
+	description = "Splits a string by line breaks.",
+	type = "function"
+})
+
+doc("_G", "validPattern", {
+	description = "Validates a Lua pattern string.",
+	type = "function"
+})
+
+doc("_G", "coroutine", {
+	description = "Coroutine library (restricted).",
+	type = "library",
+	auth = permissions.is_admin
+})
+
+doc("_G", "json", {
+	description = "JSON encode/decode helpers.",
+	type = "library",
+	auth = permissions.is_admin
+})
+
+doc("_G", "os", {
+	description = "Limited OS library.",
+	type = "library",
+	auth = permissions.is_admin
+})
+
+doc("_G", "getImageDimensions", {
+	description = "Returns image dimensions from a URL or buffer.",
+	type = "function",
+	auth = permissions.is_admin
+})
+
+doc("_G", "addRuntimeLimit", {
+	description = "Applies a runtime limit to a Lua script.",
+	type = "function",
+	auth = permissions.is_admin
+})
+
+doc("_G", "addAuthId", {
+	description = "Grants admin privileges to a user ID.",
+	type = "function",
+	auth = permissions.is_admin
+})
+
+doc("_G", "client", {
+	description = "Discordia client instance.",
+	type = "Discordia.Client",
+	auth = permissions.is_admin
+})
+
+doc("_G", "commands", {
+	description = "All registered bot commands.",
+	type = "table",
+	auth = permissions.is_admin
+})
+
+doc("_G", "_globalCommands", {
+	description = "Internal global command registry.",
+	type = "table",
+	auth = permissions.is_admin
+})
+
+doc("_G", "cmdData", {
+	description = "Persistent per-command data storage.",
+	type = "table",
+	auth = permissions.is_admin
+})
+
+doc("_G", "globalCommandCall", {
+	description = "Executes a global command programmatically.",
+	type = "function",
+	auth = permissions.is_admin
+})
+
+doc("_G", "discordia", {
+	description = "Discordia library.",
+	type = "library",
+	auth = permissions.is_admin
+})
+
+doc("_G", "channelBehavior", {
+	description = "Channel behavior configuration.",
+	type = "table",
+	auth = permissions.is_admin
+})
+
+doc("_G", "channelReactionBehavior", {
+	description = "Reaction-based channel behavior configuration.",
+	type = "table",
+	auth = permissions.is_admin
+})
+
+doc("_G", "http", {
+	description = "Internal HTTP client.",
+	type = "library",
+	auth = permissions.is_admin
+})
+
+doc("_G", "imageHandler", {
+	description = "Image processing utilities.",
+	type = "table",
+	auth = permissions.is_admin
+})
+
+doc("_G", "getDatabase", {
+	description = "Returns a database connection.",
+	type = "function",
+	auth = permissions.is_admin
+})
+
+doc("_G", "save", {
+	description = "Persists runtime data.",
+	type = "function",
+	auth = permissions.is_admin
+})
+
+doc("_G", "saveGlobalCommands", {
+	description = "Saves global command definitions.",
+	type = "function",
+	auth = permissions.is_admin
+})
+
+doc("_G", "backupFunction", {
+	description = "Backs up a function reference.",
+	type = "function",
+	auth = permissions.is_admin
+})
+
+doc("_G", "getRoleOrder", {
+	description = "Returns ordered roles for a member.",
+	type = "function",
+	auth = permissions.is_admin
+})
+
+doc("_G", "getTimerName", {
+	description = "Generates a unique timer name.",
+	type = "function",
+	auth = permissions.is_admin
+})
+
+doc("_G", "timer", {
+	description = "Timer utilities.",
+	type = "table",
+	auth = permissions.is_admin
+})
+
+doc("_G", "timeNames", {
+	description = "Timer name constants.",
+	type = "table",
+	auth = permissions.is_admin
+})
+
+doc("_G", "currency", {
+	description = "Currency system configuration.",
+	type = "table",
+	auth = permissions.is_admin
+})
+
+doc("_G", "updateCurrency", {
+	description = "Updates user currency values.",
+	type = "function",
+	auth = permissions.is_admin
+})
+
+doc("_G", "serverActivity", {
+	description = "Server activity tracking.",
+	type = "table",
+	auth = permissions.is_admin
+})
+
+doc("_G", "db_teamList", {
+	description = "Database table containing team definitions.",
+	type = "table",
+	auth = permissions.is_admin
+})
+
+doc("_G", "db_modules", {
+	description = "Database table containing module definitions.",
+	type = "table",
+	auth = permissions.is_admin
+})
+
+doc("_G", "db_url", {
+	description = "Database URL configuration.",
+	type = "string",
+	auth = permissions.is_admin
+})
+
+doc("_G", "fromage", {
+	description = "Fromage integration module.",
+	type = "library",
+	auth = permissions.is_admin
+})
+
+doc("_G", "luaDoc", {
+	description = "Lua documentation registry used by !devdoc.",
+	type = "table",
+	auth = permissions.is_admin
+})
+
+doc("_G", "postNewBreaches", {
+	description = "Posts newly detected security breaches.",
+	type = "function",
+	auth = permissions.is_admin
+})
+
+doc("_G", "printf", {
+	description = "Prints values directly to the console.",
+	params = { { name = "...", type = "*" } },
+	auth = permissions.is_admin
+})
+
+doc("_G", "reminders", {
+	description = "Table with reminders.",
+	type = "table",
+	auth = permissions.is_admin
+})
+
+doc("_G", "setReminder", {
+	description = "Sets a new reminder.",
+	params = { { name = "reminder", type = "{ text, userId, time, currentTime }" }, { name = "save", type = "boolean" } },
+	auth = permissions.is_admin
+})
+
+doc("_G", "parameters", {
+	description = "Contains the raw parameters passed by the user to a command. Example: `!cmd a b c` → parameters == 'a b c'. Can be nil.",
+	type = "string|nil"
+})
+
+doc("_G", "getUSD_BRLQuote", {
+	description = "Fetches the latest USD to BRL exchange rate. Tries Wise first and falls back to XE if Wise fails.",
+	type = "function",
+	returns = "{ quote: number, roundQuote: number }"
+})
+
+doc("_G", "isMarketOpenBRT", {
+	description = "Checks whether the current time is within Brazilian market hours (Mon–Fri, 09:00–16:00 BRT).",
+	type = "function",
+	returns = "boolean"
+})
+
+doc("_G", "findKeyInsensitive", {
+	description = "Finds a string key in a table using case-insensitive comparison.",
+	type = "function",
+	parameters = "table, string",
+	returns = "string|nil"
+})
+
+doc("math", "percent", {
+	description = "Returns the percentage of a number using another number as the base. The result is capped by the maximum value.",
+	type = "function",
+	parameters = "x: number, y: number, v?: number",
+	returns = "number"
+})
+
+doc("os", "readFile", {
+	description = "Reads the contents of a file and returns it as a string.",
+	type = "function",
+	parameters = "file: string, format?: string",
+	returns = "string"
+})
+
+doc("string", "count", {
+	description = "Counts how many occurrences of a pattern or substring appear in a string.",
+	type = "function",
+	parameters = "str: string, s: string",
+	returns = "number"
+})
+
+doc("string", "nickname", {
+	description = "Normalizes a Transformice nickname by capitalizing the first letter and lowercasing the rest.",
+	type = "function",
+	parameters = "s: string",
+	returns = "string"
+})
+
+doc("string", "split", {
+	description = "Splits a string according to a given pattern and optionally transforms each match.",
+	type = "function",
+	parameters = "str: string, pat: string, f?: function",
+	returns = "table"
+})
+
+doc("string", "superTrim", {
+	description = "Trims excessive spaces and newlines from a string, keeping words properly spaced.",
+	type = "function",
+	parameters = "s: string",
+	returns = "string"
+})
+
+doc("table", "clone", {
+	description = "Creates a shallow copy of a table, ignoring the specified keys.",
+	type = "function",
+	parameters = "list: table, ignoreList: table",
+	returns = "table"
+})
+
+doc("table", "find", {
+	description = "Checks whether a value exists in a table and returns its index.",
+	type = "function",
+	parameters = "list: table, value: string|number|boolean, index?: string|number, f?: function",
+	returns = "boolean, string|number|nil"
+})
+
+doc("table", "map", {
+	description = "Iterates over a table and returns a new table with values transformed by a function.",
+	type = "function",
+	parameters = "list: table, f: function",
+	returns = "table"
+})
+
+doc("table", "sum", {
+	description = "Returns a new table containing all values from the source table followed by values from another table.",
+	type = "function",
+	parameters = "src: table, add: table",
+	returns = "table"
+})
+
+doc("table", "random", {
+	description = "Returns a random value from a table.",
+	type = "function",
+	parameters = "list: table",
+	returns = "any"
+})
+
+doc("table", "tostring", {
+	description = "Transforms a table into a string representation, with optional indentation and depth control.",
+	type = "function",
+	parameters = "tbl: table, indent?: boolean, numIndex?: boolean, stop?: number",
+	returns = "string"
+})
+
+doc("table", "createSet", {
+	description = "Creates a set-like table where each value from the list becomes a key with value true.",
+	type = "function",
+	parameters = "list: table",
+	returns = "table"
+})
+
+doc("math", "round", {
+	description = "Rounds a number to a given decimal precision.",
+	type = "function",
+	parameters = "number: number, order?: number",
+	returns = "number"
+})
+
+doc("_G", "retriggerGamesCommands", {
+  description = "Retrigger games commands while the bot was offline",
+	type = "function",
+	auth = permissions.is_admin
+})
+
 --[[Doc
 
 ]]
@@ -1506,6 +2411,21 @@ local getDatabase = function(fileName, raw, decodeBase64, ignoreDbErr)
 
 	return out
 end
+getDatabase = function(fileName, raw, decodeBase64, ignoreDbErr)
+	local file = io.open(db_path ..fileName .. ".json", "r")
+	local content = file:read("*all")
+	file:close()
+
+	if not raw then
+		content = json.decode(content)
+	end
+
+	if not content then
+		error("Database issue -> " .. tostring(fileName))
+	end
+
+	return content
+end
 --[[Doc
 	"Gets the Transformice nickname of a member based on its Discord id"
 	@list int
@@ -1574,6 +2494,63 @@ local getInviteUses = function(i)
 	end
 end
 
+local getUSD_BRLQuote = function()
+	local success, head, body
+
+	success, head, body = pcall(http.request, "GET", "https://wise.com/rates/history+live?source=USD&target=BRL&length=1&resolution=hourly&unit=hour")
+	if success and head.code == 200 then
+		local data = json.decode(body)
+		if data and #data > 0 and data[#data].value then
+			local quote = tonumber(data[#data].value)
+			return {
+				quote = quote,
+				roundQuote = math.round(quote, 2)
+			}
+		end
+	end
+
+	head, body = http.request("GET", "https://www.xe.com/api/protected/midmarket-converter/", {
+		{ "authorization", "Basic bG9kZXN0YXI6cHVnc25heA==" }
+	})
+	if head.code == 200 then
+		local data = json.decode(body)
+		if data and data.rates and data.rates.BRL then
+			local quote = tonumber(data.rates.BRL)
+			return {
+				quote = quote,
+				roundQuote = math.round(quote, 2)
+			}
+		end
+	end
+
+	return error("Can't get USD to BRL quote")
+end
+
+local isMarketOpenBRT = function()
+	-- UTC time
+	local utc = os.date("!*t")
+
+	-- Convert to BRT (UTC-3)
+	local brtHour = utc.hour - 3
+	if brtHour < 0 then
+		brtHour = brtHour + 24
+	end
+
+	local minutesNow = brtHour * 60 + utc.min
+
+	-- Weekday check (Lua: Sunday = 1, Saturday = 7)
+	local wday = utc.wday
+	if wday == 1 or wday == 7 then
+		return false
+	end
+
+	-- Market hours: 09:00 → 16:00 BRT
+	local startMinutes = 9 * 60
+	local endMinutes = 16 * 60
+
+	return minutesNow >= startMinutes and minutesNow < endMinutes
+end
+
 --[[Doc
 	"Verifies if an user has permission over a specific permission flag."
 	@permission int
@@ -1635,6 +2612,8 @@ local hasPermission = function(permission, member, message)
 		return not not member.roles:find(function(role)
 			return string.find(string.lower(role.name), "^" .. c .. module .. "$")
 		end)]]
+	elseif permission == permissions.is_admin then
+		return authIds[member.id]
 	end
 end
 --[[Doc
@@ -1809,6 +2788,40 @@ local save = function(fileName, db, raw, encodeBase64)
 
 	return body == "true"
 end
+save = function(fileName, db, raw, encodeBase64)
+	db = (raw and tostring(db) or json.encode(db))
+
+	local file = io.open(db_path .. fileName .. ".json", "w+")
+	file:write(db)
+	file:flush()
+	file:close()
+
+	return true
+end
+
+local backupFunction = function(src_folder, dest_folder)
+	-- Ensure the destination folder exists.
+	os.execute("mkdir -p \"" .. dest_folder .. "\"")
+
+	-- Construct and execute the copy command.
+	local command = string.format("cp -r \"%s\"/* \"%s\"/", src_folder, dest_folder)
+	os.execute(command)
+end
+backupFunction = function(src_folder, dest_folder)
+	-- Create destination directory (no error if it already exists)
+	os.execute(string.format('mkdir "%s" 2>nul', dest_folder))
+
+	-- /E  = copy subdirs (including empty ones)
+	-- /R:0 /W:0 = no retries, no wait
+	-- /NFL /NDL = cleaner output (optional)
+	local command = string.format(
+		'robocopy "%s" "%s" /E /R:0 /W:0 /NFL /NDL',
+		src_folder,
+		dest_folder
+	)
+
+	os.execute(command)
+end
 
 local saveGlobalCommands = function()
 	--local toJson = base64.encode(json.encode(globalCommands))
@@ -1921,7 +2934,6 @@ end
 
 local test
 do
-	local clock = os.clock
 	test = function(fList, rate)
 		local lenF = #fList
 
@@ -1932,13 +2944,13 @@ do
 			for r = 1, rate do
 				f = fList[i]
 
-				t = clock()
+				t = uv_hrtime()
 				f(r)
-				t = clock() - t
+				t = uv_hrtime() - t
 
 				avg[i] = avg[i] + t
 			end
-			avg[i] = avg[i] * rate * 100
+			avg[i] = (avg[i] / rate) / 1e6 --ns to ms
 		end
 
 		for i = 1, lenF do
@@ -1949,10 +2961,14 @@ do
 		end)
 
 		for i = 1, lenF do
-			avg[i] = ("#" .. i .. ". Test [" .. avg[i].i .. "] AVG: " .. avg[i].avg .. "ms")
+			avg[i] = string.format("#%d. Test [%d] AVG: %.10fms", i, avg[i].i, avg[i].avg)
 		end
 		return avg, lenF
 	end
+end
+
+local removeLocalMachinePath = function(str)
+	return str:gsub("C:\\Users\\tai\\Desktop\\discord\\bots\\ModuloBot", ".\\")
 end
 
 --[[Doc
@@ -1971,7 +2987,7 @@ local throwError = function(message, errName, fn, ...)
 			embed = {
 				color = color.lua_err,
 				title = (type(errName) == "string" and ("evt@" .. errName) or errName[1]) .. " => Fatal Error!",
-				description = "```\n" .. err .. "```\n```\n" .. debug.traceback() .. "```"
+				description = "```\n" .. removeLocalMachinePath(err) .. "```\n```\n" .. removeLocalMachinePath(debug.traceback()) .. "```"
 			}
 		}
 
@@ -1981,7 +2997,10 @@ local throwError = function(message, errName, fn, ...)
 			content.content = "<@" .. client.owner.id .. ">"
 			client:getChannel(channels["code-test"]):send(content)
 		end
+
+		return
 	end
+	return err
 end
 
 --[[Doc
@@ -2024,6 +3043,16 @@ local validPattern = function(message, src, pattern)
 	return true
 end
 
+local findKeyInsensitive = function(t, expectedKey)
+	expectedKey = string.lower(expectedKey)
+
+	for k in next, t do
+		if type(k) == "string" and string.lower(k) == expectedKey then
+			return k
+		end
+	end
+end
+
 --[[Doc
 	~
 	"Gets the Lua environment that is shared between Admins and Developers."
@@ -2055,6 +3084,7 @@ local getLuaEnv = function(extra)
 		--envTfm = table.deepcopy(envTfm),
 		expToLvl = expToLvl,
 
+		findKeyInsensitive = findKeyInsensitive,
 		fixHtml = fixHtml,
 
 		getAge = getAge,
@@ -2063,10 +3093,13 @@ local getLuaEnv = function(extra)
 		getDiscMember = getDiscMember,
 		getNick = getNick,
 		getRate = getRate,
+		getUSD_BRLQuote = getUSD_BRLQuote,
 		globalCommands = table.deepcopy(globalCommands),
 
 		hasPermission = hasPermission,
 		htmlToMarkdown = htmlToMarkdown,
+
+		isMarketOpenBRT = isMarketOpenBRT,
 
 		logColor = table.copy(logColor),
 
@@ -2243,7 +3276,7 @@ local postNewBreaches = function()
 
 	local today = os.date("%Y-%m-%d")
 
-	local head, body = http.request("GET", "https://haveibeenpwned.com/api/v2/breaches")
+	local head, body = http.request("GET", "https://haveibeenpwned.com/api/v3/breaches")
 	body = json.decode(body)
 
 	local new, j = { }, 0
@@ -2301,6 +3334,56 @@ local postNewBreaches = function()
 			}
 		})
 	end
+end
+
+local setReminder = function(reminder, saveReminder)
+	if saveReminder then
+		local id = #reminders + 1
+		reminder.id = id
+		reminders[id] = reminder
+		save("reminders", reminders)
+	end
+
+	local triggerTime, time = reminder.triggerTime, reminder.time
+	local currentTime = os.time() * 1000
+	local shouldExecuteTime = (triggerTime + time) - currentTime
+
+	timer.setTimeout(math.max(0, shouldExecuteTime), coroutine.wrap(function(text, userId, triggerTime, reminderId)
+		triggerTime = (os.time() * 1000) - triggerTime
+
+		local elapsed = math.floor(triggerTime / 1000)
+		local d = math.floor(elapsed / 86400)
+		local h = math.floor((elapsed % 86400) / 3600)
+		local m = math.floor((elapsed % 3600) / 60)
+		local s = math.floor(elapsed % 60)
+
+		local parts = {}
+
+		if d > 0 then parts[#parts + 1] = d .. " day" .. (d > 1 and "s" or "") end
+		if h > 0 then parts[#parts + 1] = h .. " hour" .. (h > 1 and "s" or "") end
+		if m > 0 then parts[#parts + 1] = m .. " minute" .. (m > 1 and "s" or "") end
+		if s > 0 then parts[#parts + 1] = s .. " second" .. (s > 1 and "s" or "") end
+
+		local info
+		if #parts > 1 then
+			info = table.concat(parts, ", ", 1, #parts - 1) .. " and " .. parts[#parts]
+		elseif #parts == 1 then
+			info = parts[1]
+		else
+			info = "0 second"
+		end
+
+		client:getUser(userId):send({
+			embed = {
+				color = color.sys,
+				title = ":bulb: Reminder",
+				description = info .. " ago you asked to be reminded about ```\n" .. text .. "```"
+			}
+		})
+
+		reminders[reminderId] = nil
+		save("reminders", reminders)
+	end), reminder.text, reminder.userId, triggerTime, reminder.id)
 end
 
 local messageCreate, messageDelete, globalCommandCall
@@ -2852,7 +3935,7 @@ commands["doc"] = {
 	description = "Gets information about a specific lua function.",
 	f = function(message, parameters)
 		if parameters and #parameters > 0 then
-			local head, body = http.request("GET", "http://www.lua.org/manual/5.2/manual.html")
+			local head, body = http.request("GET", "https://www.lua.org/manual/5.2/manual.html")
 
 			if body then
 				local syntax, description = string.match(body, "<a name=\"pdf%-" .. parameters .. "\"><code>(.-)</code></a></h3>[\n<p>]*(.-)<h[r2]>")
@@ -3041,13 +4124,15 @@ commands["edit"] = {
 }
 commands["ghelp"] = {
 	auth = permissions.public,
-	f = function(message)
-		commands["help"].f(message, nil, nil, globalCommands)
+	f = function(message, parameters)
+		commands["help"].f(message, parameters, nil, globalCommands)
 	end
 }
 commands["help"] = {
 	auth = permissions.public,
-	f = function(message, _, category, cmdSrc)
+	f = function(message, parameters, category, cmdSrc)
+		local hasFilter = not not parameters
+
 		if category and string.sub(category, 1, 1) == "#" then
 			local keys = { } -- auths cuz the system is fkd
 			local cmds = { }
@@ -3066,7 +4151,11 @@ commands["help"] = {
 				local icon = permIcons[permissions(v)]--((v > permissions.public) and ":small_blue_diamond:" or ":small_orange_diamond:")
 				table.sort(cmds[v], function(c1, c2) return c1.cmd < c2.cmd end)
 				for j = 1, #cmds[v] do
-					cmds[v][j] = icon .. prefix .. cmds[v][j].cmd .. "** " .. (cmds[v][j].data.info or '')
+					local cmd = cmds[v][j].cmd
+
+					if not hasFilter or string.find(cmd, parameters, 1, true) then
+						cmds[v][j] = icon .. prefix .. cmds[v][j].cmd .. "** " .. (cmds[v][j].data.info or '')
+					end
 				end
 				keys[k] = table.concat(cmds[v], '\n')
 			end
@@ -3083,21 +4172,29 @@ commands["help"] = {
 		else
 			local keys = { } -- auths cuz the system is fkd
 			local cmds, icon, description, index = { }
-			for cmd, data in next, (cmdSrc or commands) do
-				if not data.category or (message.channel.category and data.category == message.channel.category.id) then
-					if not data.channel or data.channel == message.channel.id then
+			local commandsSourceTable = (cmdSrc or commands)
+			for cmd, cmdData in next, commandsSourceTable do
+				if not cmdData.category or (message.channel.category and cmdData.category == message.channel.category.id) then
+					if not cmdData.channel or cmdData.channel == message.channel.id then
+						local data = cmdData
+						if cmdData.ref then
+							data = commandsSourceTable[cmdData.ref]
+						end
+
 						if authIds[message.author.id] or (data.auth and hasPermission(data.auth, message.member, message)) then
-							icon = (not data.auth and ":gear:" or permIcons[permissions(data.auth)]) .. " "--(not data.auth and ":gear: " or (data.auth > permissions.public) and ":small_blue_diamond: " or ":small_orange_diamond: ")
+							if not hasFilter or string.find(cmd, parameters, 1, true) then
+								icon = (not data.auth and permIcons.is_admin or permIcons[permissions(data.auth)]) .. " "--(not data.auth and ":gear: " or (data.auth > permissions.public) and ":small_blue_diamond: " or ":small_orange_diamond: ")
 
-							description = data.description or data.info
-							description = description and ("- " .. description) or ''
+								description = data.description or data.info
+								description = description and ("- " .. description) or ''
 
-							index = data.auth or 666
-							if not cmds[index] then
-								cmds[index] = { }
-								keys[#keys + 1] = index
+								index = data.auth or 666
+								if not cmds[index] then
+									cmds[index] = { }
+									keys[#keys + 1] = index
+								end
+								cmds[index][#cmds[index] + 1] = { cmd = cmd, data = icon .. "**!" .. cmd .. "** " .. description }
 							end
-							cmds[index][#cmds[index] + 1] = { cmd = cmd, data = icon .. "**!" .. cmd .. "** " .. description }
 						end
 					end
 				end
@@ -3624,53 +4721,75 @@ commands["remind"] = {
 	auth = permissions.public,
 	description = "Sets a reminder. Bot will remind you.",
 	f = function(message, parameters)
-		if parameters and #parameters > 2 then
-			local time, order, text = string.match(parameters, "^(%d+%.?%d*)(%a+)[\n ]+(.-)$")
-			if time and order and text and #text > 0 then
-				time = tonumber(time)
-				if order == "ms" then
-					time = math.clamp(time, 6e4, 216e5)
-				elseif order == 's' then
-					time = math.clamp(time, 60, 21600) * 1000
-				elseif order == 'm' then
-					time = math.clamp(time, 1, 360) * 6e4
-				elseif order == 'h' then
-					time = math.clamp(time, .017, 6) * 3.6e6
-				else
-					toDelete[message.id] = message:reply({
-						content = "<@!" .. message.author.id .. ">",
-						embed = {
-							color = color.err,
-							title = ":timer: Invalid time magnitude order '" .. order .. "'",
-							description = "The available time magnitude orders are **ms**, **s**, **m**, **h**."
-						}
-					})
-					return
-				end
-
-				timer.setTimeout(time, coroutine.wrap(function(channel, text, userId, cTime)
-					cTime = os.time() - cTime
-					local h, m, s = math.floor(cTime / 3600), math.floor(cTime % 3600 / 60), math.floor(cTime % 3600 % 60)
-					local info = (((h > 0 and (h .. " hour") .. (h > 1 and "s" or '') .. (((s > 0 and m > 0) and ", ") or (m > 0 and " and ") or '')) or '') .. ((m > 0 and (m .. " minute") .. (m > 1 and "s" or '')) or '') .. ((s > 0 and (" and " .. s .. " second" .. (s > 1 and "s" or ''))) or ''))
-
-					channel:send({
-						embed = {
-							color = color.sys,
-							title = ":bulb: Reminder",
-							description = info .. " ago you asked to be reminded about ```\n" .. text .. "```"
-						}
-					})
-				end), message.author, text, message.author.id, os.time())
-
-				local ok = message:reply(":thumbsup:")
-				timer.setTimeout(1e4, coroutine.wrap(function(ok)
-					ok:delete()
-				end), ok)
-				message:delete()
-			end
-		else
-			sendError(message, "REMIND", "Invalid or missing parameters.", "Use `!remind time_and_order text`.")
+		if not (parameters and #parameters > 2) then
+			return sendError(message, "REMIND", "Invalid or missing parameters.", "Use `!remind time_and_order (ms, s, m, h, d) text`.")
 		end
+
+		local timePart, text = string.match(parameters, "^([^%s]+)%s+(.+)$")
+		if not timePart or not text or text == '' then
+			return
+		end
+
+		local orders = {
+			ms = 1,
+			s  = 1000,
+			m  = 60000,
+			h  = 3600000,
+			d  = 86400000
+		}
+
+		local totalMilliseconds = 0
+
+		for number, order in string.gmatch(timePart, "(%d+)(%a+)") do
+			local multiplier = orders[order]
+			if not multiplier then
+				return sendError(message, "REMIND", "Invalid order parameter.", "The available orders are: ms, s, m, h, d.")
+			end
+
+			totalMilliseconds = totalMilliseconds + tonumber(number) * multiplier
+		end
+
+    if totalMilliseconds == 0 then
+			return sendError(message, "REMIND", "Invalid or missing parameters.", "Use `!remind time_and_order (ms, s, m, h, d) text`.")
+    end
+
+		local maxDays = authIds[message.author.id] and 90 or 7
+		totalMilliseconds = math.clamp(totalMilliseconds, orders.m * 1, orders.d * maxDays)
+		
+		local reminder = {
+			time = totalMilliseconds,
+			text = text,
+			userId = message.author.id,
+			triggerTime = os.time() * 1000,
+		}
+
+		setReminder(reminder, true)
+
+		local ok = message:reply(":thumbsup:")
+		timer.setTimeout(1e4, coroutine.wrap(function(ok)
+			ok:delete()
+		end), ok)
+		message:delete()
+
+		-- timer.setTimeout(time, coroutine.wrap(function(channel, text, userId, cTime)
+		-- 	cTime = os.time() - cTime
+		-- 	local h, m, s = math.floor(cTime / 3600), math.floor(cTime % 3600 / 60), math.floor(cTime % 3600 % 60)
+		-- 	local info = (((h > 0 and (h .. " hour") .. (h > 1 and "s" or '') .. (((s > 0 and m > 0) and ", ") or (m > 0 and " and ") or '')) or '') .. ((m > 0 and (m .. " minute") .. (m > 1 and "s" or '')) or '') .. ((s > 0 and (" and " .. s .. " second" .. (s > 1 and "s" or ''))) or ''))
+
+		-- 	channel:send({
+		-- 		embed = {
+		-- 			color = color.sys,
+		-- 			title = ":bulb: Reminder",
+		-- 			description = info .. " ago you asked to be reminded about ```\n" .. text .. "```"
+		-- 		}
+		-- 	})
+		-- end), message.author, text, message.author.id, os.time())
+
+		-- local ok = message:reply(":thumbsup:")
+		-- timer.setTimeout(1e4, coroutine.wrap(function(ok)
+		-- 	ok:delete()
+		-- end), ok)
+		-- message:delete()
 	end
 }
 commands["report"] = {
@@ -4588,8 +5707,6 @@ commands["lua"] = {
 			]]
 			ENV.discord.messageId = message.id
 
-
-
 			ENV.discord.message = wrapMessageObject(message)
 
 			ENV.discord.messageContent = message.content:gsub("^!%s*(%S)", "!%1") -- remove later
@@ -4965,7 +6082,7 @@ commands["lua"] = {
 
 			ENV.discord.isMember = function(userId)
 				assert(userId, "Member id cannot be nil in discord.isMember")
-				return guild:getMember(userId) ~= nil
+				return not not (guild:getMember(userId))
 			end
 
 			ENV.discord.sendPrivateMessage = function(content, id)
@@ -5074,9 +6191,9 @@ commands["lua"] = {
 			end
 
 			-- Runs the code
-			local ms = os.clock()
+			local ms = uv_hrtime()
 			local success, runtimeErr = pcall(func)
-			ms = (os.clock() - ms) * 1000
+			ms = (uv_hrtime() - ms) / 1e6
 
 			if not success then
 				toDelete[message.id] = message:reply({
@@ -5368,12 +6485,21 @@ commands["delgcmd"] = {
 				if globalCommands[command] and (globalCommands[command].author == message.author.id or authIds[message.author.id]) then
 					globalCommands[command] = nil
 
+					local deletedAliases = {}
+					for cmd, data in next, globalCommands do
+						if data.ref and data.ref == command then
+							globalCommands[cmd] = nil
+							deletedAliases[#deletedAliases + 1] = cmd
+						end
+					end
+					deletedAliases = #deletedAliases == 0 and '' or "\n\nAliases `" .. table.concat(deletedAliases, "`, `") .. "` deleted successfully!"
+
 					saveGlobalCommands()
 
 					message:reply({
 						embed = {
 							color = color.sys,
-							description = "Command `" .. command .. "` deleted successfully!",
+							description = "Command `" .. command .. "` deleted successfully!" .. deletedAliases,
 							footer = { text = "By " .. message.member.name }
 						}
 					})
@@ -5521,7 +6647,7 @@ commands["gcmd"] = {
 											return sendError(message, "GCMD", "This command already exists and is not global.")
 										end
 										if globalCommands[command] and (globalCommands[command].author ~= message.author.id and not authIds[message.author.id]) then
-											return sendError(message, "GCMD", "This command already exists.", "Ask the owner, <@" .. globalCommands[command].author .. ">, for an edition.")
+											return sendError(message, "GCMD", "This command already exists.", "Ask the owner, <@" .. globalCommands[command].author .. ">, for editing it.")
 										end
 
 										local cmd = getCommandTable(message, script, content, title, description)
@@ -5872,14 +6998,26 @@ commands["del"] = {
 commands["exit"] = {
 	description = "Ends the bot process.",
 	f = function(message)
-		save("serverModulesData", modules, false, true)
+		--save("serverModulesData", modules, false, true)
 
-		saveGlobalCommands()
-
-		save("serverActiveChannels", activeChannels)
-		save("serverActiveMembers", activeMembers)
-		save("serverCommandsData", cmdData)
-		save("serverActivity", serverActivity)
+		if table.count(activeChannels) > 0 then
+			save("serverActiveChannels", activeChannels)
+		end
+		if table.count(activeMembers) > 0 then
+			save("serverActiveMembers", activeMembers)
+		end
+		if table.count(memberProfiles) > 0 then
+			save("serverMemberProfiles", memberProfiles)
+		end
+		if table.count(cmdData) > 0 then
+			save("serverCommandsData", cmdData)
+		end
+		if table.count(serverActivity) > 0 then
+			save("serverActivity", serverActivity)
+		end
+		if table.count(globalCommands) > 0 then
+			save("serverGlobalCommands", globalCommands)
+		end
 
 		message:delete()
 		log("INFO", "Disconnected from '" .. client.user.name .. "'", logColor.red)
@@ -5903,6 +7041,9 @@ commands["refresh"] = {
 		end
 		if table.count(serverActivity) > 0 then
 			save("serverActivity", serverActivity)
+		end
+		if table.count(globalCommands) > 0 then
+			save("serverGlobalCommands", globalCommands)
 		end
 
 		message:delete()
@@ -6002,8 +7143,171 @@ commands["resetactivity"] = {
 		message:delete()
 	end
 }
+commands["devdoc"] = {
+	auth = permissions.is_dev,
+	description = "Shows Lua API documentation",
+	f = function(message, parameters)
+		parameters = parameters and #parameters > 0 and tostring(parameters) or ''
+
+		local ns, fn
+		if parameters == "" then
+			ns, fn = nil, nil
+		elseif string.find(parameters, "%.") then
+			ns, fn = string.match(parameters, "^([^%.]+)%s*%.%s*(.+)$")
+		else
+			ns, fn = string.match(parameters, "^(%S+)%s*(%S*)$")
+			fn = fn and #fn > 0 and fn or nil
+
+			if not envDocs[ns] and not fn then
+				ns, fn = '_G', ns
+			end
+		end
+
+		if ns then
+			ns = findKeyInsensitive(envDocs, ns)
+		end
+
+		-- NO PARAMETERS → LIST NAMESPACES
+		if not ns or not fn then
+			local lines, li = {}, 0
+
+			for name, scope in pairsByIndexes(envDocs, function(a, b) return a < b end) do
+				if not ns or ns == name then
+					local methods, mi = {}, 0
+
+					for mName, data in next, scope do
+						if not data.auth or hasPermission(data.auth, message.member, message) then
+							mi = mi + 1
+							methods[mi] = (data.auth and (permIcons[permissions(data.auth)] .. " ") or '') .. "`" .. mName .. "`"
+						end
+					end
+
+					if mi > 0 then
+						table.sort(methods)
+
+						li = li + 1
+						lines[li] = name
+
+						for i = 1, mi do
+							li = li + 1
+							lines[li] =
+								(i == mi and "└─ " or "├─ ") .. methods[i]
+						end
+
+						li = li + 1
+						lines[li] = "" -- spacing between namespaces
+					end
+				end
+			end
+
+			if li == 0 then
+				toDelete[message.id] = message:reply("No entries available.")
+				return
+			end
+
+			toDelete[message.id] = message:reply({
+				embed = {
+					color = color.sys,
+					title = "Bot API",
+					description = table.concat(lines, "\n")
+				}
+			})
+			return
+		end
+
+		local scope = envDocs[ns] or envDocs._G
+		if not fn then
+			toDelete[message.id] = message:reply("Missing name, only got namespace")
+			return
+		end
+
+		-- FUNCTION DOC
+		fn = findKeyInsensitive(scope, fn)
+		local data = scope[fn]
+
+		if not data then
+			toDelete[message.id] = message:reply("Documentation for `" .. tostring(ns) .. "." .. tostring(fn) .. "` not found.")
+			return
+		elseif data.auth and not hasPermission(data.auth, message.member, message) then
+			toDelete[message.id] = message:reply("You don’t have permission to access the documentation for `" .. tostring(ns) .. "." .. tostring(fn) .. "`.")
+			return
+		end
+
+		local lines, i = {
+			data.description or "_N/A_"
+		}, 1
+
+		if data.type then
+			i = i + 1
+			lines[i] = "\n**Type:** `" .. data.type .. "`"
+		end
+
+		if data.params then
+			i = i + 1
+			lines[i] = "\n**Parameters:**"
+			for p = 1, #data.params do
+				i = i + 1
+				lines[i] = "`" .. data.params[p].name .. "` : " .. data.params[p].type
+			end
+		end
+
+		if data.returns then
+			i = i + 1
+			lines[i] = "\n**Returns:** `" .. data.returns .. "`"
+		end
+
+		toDelete[message.id] = message:reply({
+			embed = {
+				color = color.sys,
+				title = (data.auth and (permIcons[permissions(data.auth)] .. " ") or '') .. "**" .. ns .. "." .. fn .. "**",
+				description = table.concat(lines, "\n")
+			}
+		})
+	end
+}
+commands["alvo"] = {
+	description = "Sets a USD → BRL target quote (quote notification)",
+	auth = permissions.is_module,
+	f = function(message, parameters)
+		local target = tonumber(parameters)
+		if not target then
+			return sendError(
+				message,
+				"alvo",
+				"Invalid target value.",
+				"Usage: `!alvo <value>` (example: `!alvo 5.10`)"
+			)
+		end
+
+    local userId = message.author.id
+		local targetData = {
+			userId = userId,
+			target = target,
+			createdAt = os.time()
+		}
+
+    local totalQuotes = #quoteTargets
+    for quoteIndex = 1, totalQuotes do
+      local quote = quoteTargets[quoteIndex]
+      if quote.userId == userId and quote.target == target then
+        return sendError(
+          message,
+          "alvo",
+          "Target <" .. target .. "> is already set"
+        )
+      end
+    end
+
+		quoteTargets[totalQuotes + 1] = targetData
+
+		save("quoteTargets", quoteTargets)
+
+		message:delete()
+	end
+}
 
 commands["lu"]=commands["lua"]
+commands["ping"]=commands["conn"]
 
 --[[ Channel Behaviors ]]--
 --[==[
@@ -6437,7 +7741,7 @@ channelReactionBehavior["report"] = {
 		if hash == reactions.x then
 			message:delete()
 		else
-			local r_channel, r_message = string.match(message.content, "discordapp%.com/channels/%d+/(%d+)/(%d+)")
+			local r_channel, r_message = string.match(message.content, "discord%.com/channels/%d+/(%d+)/(%d+)")
 
 			local msg = client:getChannel(r_channel):getMessage(r_message)
 			if msg then
@@ -6699,6 +8003,7 @@ local wrapF = function(f)
 	end
 end
 
+local retriggerGamesCommands
 
 --[[ Events ]]--
 client:on("ready", function()
@@ -6712,6 +8017,9 @@ client:on("ready", function()
 	db_teamList = {}--TRY_REQUEST("teamList")
 	db_modules = {}--TRY_REQUEST("modules")
 	luaDoc = {}--TRY_REQUEST("luaDoc")
+	reminders = TRY_REQUEST("reminders")
+	quoteTargets = TRY_REQUEST("quoteTargets")
+
 	-- Normalize string indexes ^
 	for k, v in next, table.copy(memberProfiles) do
 		for i, j in next, v do
@@ -6769,6 +8077,7 @@ client:on("ready", function()
 				authIds[id] = true
 			end,
 
+			backupFunction = backupFunction,
 			botIds = botIds,
 			boundaries = boundaries,
 
@@ -6787,7 +8096,7 @@ client:on("ready", function()
 			getRoleOrder = getRoleOrder,
 			getTimerName = getTimerName,
 			globalCommandCall = globalCommandCall,
-			globalCommands = globalCommands,
+			_globalCommands = globalCommands,
 
 			http = http,
 
@@ -6808,11 +8117,15 @@ client:on("ready", function()
 				return print(...)
 			end,
 
+			reminders = reminders,
+      retriggerGamesCommands = retriggerGamesCommands,
+
 			save = save,
 			saveGlobalCommands = saveGlobalCommands,
 			sendError = sendError,
 			serverActivity = serverActivity,
 			setPermissions = setPermissions,
+			setReminder = setReminder,
 			specialInvites = specialInvites,
 
 			throwError = throwError,
@@ -6879,7 +8192,14 @@ client:on("ready", function()
 	client:setAvatar(botAvatars[currentAvatar])
 	client:setActivity("Prefix !")
 
+	for _, reminder in next, reminders do
+		if reminder then
+			setReminder(reminder, false)
+		end
+	end
+
 	log("INFO", "Running as '" .. client.user.name .. "'", logColor.green)
+	throwError(nil, "RetriggerGamesCommands", retriggerGamesCommands)
 end)
 
 globalCommandCall = function(cmd, message, parameters, command)
@@ -6936,6 +8256,12 @@ globalCommandCall = function(cmd, message, parameters, command)
 		toDelete[message.id] = msg
 	end
 end
+local isLikelyCommand = function(message)
+	local prefix = "!"
+	local command = string.match(message.content, "^" .. prefix .. "%s*(%S+)[\n ]+(.*)")
+	command = command or string.match(message.content, "^" .. prefix .. "%s*(%S+)")
+  return not not command
+end
 messageCreate = function(message, skipChannelActivity)
 	-- Ignore its own messages
 	if message.author.id == client.user.id then return end
@@ -6973,17 +8299,24 @@ messageCreate = function(message, skipChannelActivity)
 	if not command then
 		if message.channel.type == 1 then return end -- dms
 
-		if string.find(message.content, "gZPygkN0kqM") then
+		if string.find(message.content, "gZPygkN0kqM", 1, true) then
 			return message:delete()
 		end
 		if string.find(message.content, "L%.?U%.?A%.?") then
 			message:reply("Lua *, it's not an acronym. Noob!")
 		end
-		if string.find(message.content, "[Dd][Ee][Vv][Ee][Ll][Ee][Pp][Ee][Rr]") then
+		if string.find(message.content:lower(), "develeper", 1, true) then
 			message:reply("Developer *, noob.")
-		end
-		if string.find(message.content, "[Dd][Ee][Vv][Ee][Ll][Oo][Pp][Ee][Rr][Ee][Ss]") then
+		elseif string.find(message.content:lower(), "developeres", 1, true) then
 			message:reply("Developers *, noob.")
+		end
+		if string.find(message.content:lower(), "american", 1, true) then
+			message:reply("Unitedstatian *")
+		elseif string.find(message.content:lower(), "america", 1, true) then
+			message:reply("United States *")
+		end
+		if string.find(message.content, pigEmoji) then
+			message:reply("🇵🇸 🇵🇸 🇵🇸 🇵🇸 **FREE PALESTINE!**\nMention the modern nazism again and you might be kicked from this horror-free server.")
 		end
 
 		if not skipChannelActivity then
@@ -7081,6 +8414,7 @@ messageCreate = function(message, skipChannelActivity)
 		else
 			throwError(message, { "Global Command [" .. string.upper(command) .. "]" }, globalCommandCall, cmd, message, parameters, command)
 		end
+    return true
 	end
 end
 messageDelete = function(message, skipChannelActivity)
@@ -7223,6 +8557,11 @@ local reactionAdd = function(cached, channel, messageId, hash, userId)
 	if userId == client.user.id then return end
 
 	local message = channel:getMessage(messageId)
+
+	if hash == pigEmoji then
+		return message:removeReaction(hash, userId)
+	end
+
 	for k, v in next, channelReactionBehavior do
 		if v.f_Add and channels[k] and channels[k] == channel.id then
 			return throwError(message, { "ReactionAdd Behavior [" .. k .. "]" }, v.f_Add, message, channel, hash, userId)
@@ -7413,61 +8752,104 @@ end)
 
 local clockMin = function()
 	xpcall(function()
+		if not modules then return end
+		minutes = minutes + 1
 
-	if not modules then return end
-	minutes = minutes + 1
+		if minutes == 1 then
+			updateCurrency()
+		end
 
-	if minutes == 1 then
-		updateCurrency()
-	end
+		if minutes % 25 == 0 then
+			save("serverActiveChannels", activeChannels)
+			save("serverActiveMembers", activeMembers)
+			save("serverMemberProfiles", memberProfiles)
+			save("serverCommandsData", cmdData)
+			save("serverActivity", serverActivity)
+		end
 
-	if minutes % 5 == 0 then
-		save("serverActiveChannels", activeChannels)
-		save("serverActiveMembers", activeMembers)
-		save("serverMemberProfiles", memberProfiles)
-		save("serverCommandsData", cmdData)
-		save("serverActivity", serverActivity)
-	end
-
-	for k, v in next, table.deepcopy(polls) do
-		local poll = client:getChannel(v.channel)
-		if poll then
-			poll = poll:getMessage(k)
+		for k, v in next, table.deepcopy(polls) do
+			local poll = client:getChannel(v.channel)
 			if poll then
-				if os.time() > v.time then
-					local totalVotes = v.votes[1] + v.votes[2]
+				poll = poll:getMessage(k)
+				if poll then
+					if os.time() > v.time then
+						local totalVotes = v.votes[1] + v.votes[2]
 
-					local totalStr = ''
-					for i = 1, 2 do
-						totalStr = totalStr .. "Total of `\"" .. v.option[i] .. "\"`: " .. v.votes[i] .. " (" .. math.ceil(math.percent(v.votes[i], totalVotes)) .. "%)" .. "\n"
+						local totalStr = ''
+						for i = 1, 2 do
+							totalStr = totalStr .. "Total of `\"" .. v.option[i] .. "\"`: " .. v.votes[i] .. " (" .. math.ceil(math.percent(v.votes[i], totalVotes)) .. "%)" .. "\n"
+						end
+						poll.embed.description = string.match(poll.embed.description, "```.*```\n") .. totalStr
+
+						local results = {{ 1, v.votes[1] }, { 2, v.votes[2] }}
+						table.sort(results, function(a, b) return a[2] > b[2] end)
+
+						poll.embed.author.name = poll.embed.author.name .. " - Results"
+						poll.embed.footer.text = "Final Decision: \"" .. (results[1][2] == results[2][2] and "Tie" or v.option[results[1][1]]) .. "\""
+
+						poll:clearReactions()
+
+						polls[k] = nil
+					else
+						poll.embed.footer.text = "Ends in " .. math.floor((v.time - os.time()) / 60) .. " minutes."
 					end
-					poll.embed.description = string.match(poll.embed.description, "```.*```\n") .. totalStr
 
-					local results = {{ 1, v.votes[1] }, { 2, v.votes[2] }}
-					table.sort(results, function(a, b) return a[2] > b[2] end)
-
-					poll.embed.author.name = poll.embed.author.name .. " - Results"
-					poll.embed.footer.text = "Final Decision: \"" .. (results[1][2] == results[2][2] and "Tie" or v.option[results[1][1]]) .. "\""
-
-					poll:clearReactions()
-
-					polls[k] = nil
-				else
-					poll.embed.footer.text = "Ends in " .. math.floor((v.time - os.time()) / 60) .. " minutes."
+					poll:setEmbed(poll.embed)
 				end
-
-				poll:setEmbed(poll.embed)
 			end
 		end
-	end
+
+		if #quoteTargets > 0 and isMarketOpenBRT() then
+			local quote = throwError(nil, 'Get USD->BRL Quote', getUSD_BRLQuote)
+
+			local hit = {}
+			for index = 1, #quoteTargets do
+				local target = quoteTargets[index]
+				if target and quote.quote >= target.target then
+					hit[#hit + 1] = { index, target }
+				end
+			end
+
+			-- Remove from table
+			for index = #hit, 1, -1 do
+				table.remove(quoteTargets, hit[index][1])
+			end
+
+			for index = 1, #hit do
+				local target = hit[index][2]
+				client:getUser(target.userId):send({
+					embed = {
+						color = color.interaction,
+						title = string.format(
+							":bell: Quote Target (R$ %.2f) has been hit!",
+							tostring(target.target)
+						),
+						description = string.format(
+							":currency_exchange: **USD :flag_us: → BRL :flag_br:**\n\n\z
+							:dollar: Current quote: **R$ %.4f**\n\z
+							:dart: Target: **R$ %.2f**\n\z
+							:bust_in_silhouette: Tracking for: <@%s>\n\n",
+							tostring(quote.quote),
+							tostring(target.target),
+							target.userId
+						)
+					}
+				})
+			end
+
+			if #hit > 0 then
+				save("quoteTargets", quoteTargets)
+			end
+		end
 
 	end, function()
-		client:getChannel("465583146071490560"):reply("<@285878295759814656>\n```\n" .. debug.traceback() .. "```")
+		client:getChannel("465583146071490560"):reply("<@285878295759814656>\n```\n" .. removeLocalMachinePath(debug.traceback()) .. "```")
 	end)
 end
 clock:on("min", function()
 	throwError(nil, "ClockMinute", clockMin)
 end)
+
 local clockHour = function()
 	if not modules then return end
 	updateCurrency()
@@ -7479,10 +8861,105 @@ local clockHour = function()
 
 	postNewBreaches()
 
-	http.request("GET", db_url .. "backup.php?k=" .. tokens.discdb, DB_COOKIES_N_BLAME_INFINITYFREE)
+	backupFunction(db_path, backup_path .. os.date("%y-%m-%d"))
+	--http.request("GET", db_url .. "backup.php?k=" .. tokens.discdb, DB_COOKIES_N_BLAME_INFINITYFREE)
 end
 clock:on("hour", function()
 	throwError(nil, "ClockHour", clockHour)
 end)
+
+retriggerGamesCommands = function()
+  log("INFO", "Checking #games", logColor.green)
+  local channel = client:getGuild(channels["guild"]):getChannel(channels["games"])
+  local messages = channel:getMessages(100)
+
+  local memberMessages, lastBotMessageTimestamp, createdAt = {}, 0
+  for message in messages:iter() do
+    if message.author.id == client.user.id then
+      createdAt = message.createdAt
+      if createdAt > lastBotMessageTimestamp then
+        lastBotMessageTimestamp = createdAt
+      end
+    else
+      memberMessages[#memberMessages + 1] = message
+    end
+  end
+
+  table.sort(memberMessages, function(msg1, msg2)
+    return msg1.createdAt < msg2.createdAt
+  end)
+
+  local gameCommands = {}
+  for index = 1, #memberMessages do
+    local message = memberMessages[index]
+    if message.createdAt > lastBotMessageTimestamp and isLikelyCommand(message) then
+      gameCommands[#gameCommands + 1] = {
+        author = message.author.id,
+        message = message
+      }
+    end
+  end
+
+  local SAME_AUTHOR_DELAY = 5.5 * 60 * 1000   -- 5.5 minutes
+  local DIFFERENT_AUTHOR_DELAY = 5 * 1000     -- 5 seconds
+
+  local function nowMs()
+    return os.time() * 1000
+  end
+
+  local index = 1
+  local authorCooldowns = {}
+
+  local function processNext()
+    if index > #gameCommands then
+      log("INFO", "Completed #games message", logColor.green)
+      return
+    end
+
+    local data = gameCommands[index]
+    local currentAuthor = data.author
+    local now = nowMs()
+
+    if not authorCooldowns[currentAuthor] then
+      authorCooldowns[currentAuthor] = 0
+    end
+
+    -- If author still on cooldown, wait until allowed
+    local cooldownRemaining = authorCooldowns[currentAuthor] - now
+
+    if cooldownRemaining > 0 then
+      log("INFO", string.format("\t\tAuthor on cooldown, waiting %s ms", cooldownRemaining), logColor.green)
+
+      timer.setTimeout(cooldownRemaining, coroutine.wrap(function()
+        processNext()
+      end))
+
+      return
+    end
+
+    -- Execute message
+    log("INFO", string.format("\tChecking message %q from %q in #games", data.message.content, data.message.author.name), logColor.green)
+    local wasCommand = messageCreate(data.message)
+
+    if wasCommand then
+      -- Set real cooldown
+      authorCooldowns[currentAuthor] = nowMs() + SAME_AUTHOR_DELAY
+
+      log("INFO", string.format("\tSet cooldown until %s", authorCooldowns[currentAuthor]), logColor.green)
+      
+      -- Optional small spacing before next message
+      timer.setTimeout(DIFFERENT_AUTHOR_DELAY, coroutine.wrap(function()
+        index = index + 1
+        processNext()
+      end))
+    else
+      -- No delay if not a command
+      index = index + 1
+      processNext()
+    end
+  end
+
+  processNext()
+end
 
 client:run(os.readFile("Content/token.txt", "*l"))
