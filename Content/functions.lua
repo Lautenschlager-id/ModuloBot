@@ -10,6 +10,22 @@ math.percent = function(x, y, v)
 	local m = x/y * v
 	return math.min(m, v)
 end
+--[[Doc
+	"Rounds a number to a given decimal precision."
+	@number number
+	@order number
+	>number
+]]
+math.round = function(number, order)
+	order = order or 0
+	local factor = 10 ^ order
+
+	if number >= 0 then
+		return math.floor(number * factor + 0.5) / factor
+	else
+		return math.ceil(number * factor - 0.5) / factor
+	end
+end
 
 --[[Doc
 	~
