@@ -18,6 +18,9 @@ local GuildTextChannel = require('containers/GuildTextChannel')
 local GuildVoiceChannel = require('containers/GuildVoiceChannel')
 local GuildCategoryChannel = require('containers/GuildCategoryChannel')
 local Snowflake = require('containers/abstract/Snowflake')
+local constants = require('constants')
+
+local SECONDS_PER_DAY = constants.HOUR_PER_DAY * constants.MIN_PER_HOUR * constants.S_PER_MIN
 
 local json = require('json')
 local enums = require('enums')
@@ -697,7 +700,7 @@ function Guild:banUser(id, reason, days)
 	local query = reason and {reason = reason}
 	if days then
 		query = query or {}
-		query['delete-message-days'] = days
+		query['delete_message_seconds'] = days * SECONDS_PER_DAY
 	end
 	id = Resolver.userId(id)
 	local data, err = self.client._api:createGuildBan(self._id, id, query)
