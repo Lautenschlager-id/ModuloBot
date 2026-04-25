@@ -144,7 +144,7 @@ local channels = {
 	["role-log"] = "598894097419337755",
 	["greetings"] = "598898246500483072",
 	["breach"] = "718659508980809758",
-  ["games"] = "574279126073212928",
+	["games"] = "574279126073212928",
 }
 
 local botIds = {
@@ -1874,7 +1874,7 @@ doc("math", "round", {
 })
 
 doc("_G", "retriggerGamesCommands", {
-  description = "Retrigger games commands while the bot was offline",
+	description = "Retrigger games commands while the bot was offline",
 	type = "function",
 	auth = permissions.is_admin
 })
@@ -4749,9 +4749,9 @@ commands["remind"] = {
 			totalMilliseconds = totalMilliseconds + tonumber(number) * multiplier
 		end
 
-    if totalMilliseconds == 0 then
+		if totalMilliseconds == 0 then
 			return sendError(message, "REMIND", "Invalid or missing parameters.", "Use `!remind time_and_order (ms, s, m, h, d) text`.")
-    end
+		end
 
 		local maxDays = authIds[message.author.id] and 90 or 7
 		totalMilliseconds = math.clamp(totalMilliseconds, orders.m * 1, orders.d * maxDays)
@@ -7279,24 +7279,24 @@ commands["alvo"] = {
 			)
 		end
 
-    local userId = message.author.id
+		local userId = message.author.id
 		local targetData = {
 			userId = userId,
 			target = target,
 			createdAt = os.time()
 		}
 
-    local totalQuotes = #quoteTargets
-    for quoteIndex = 1, totalQuotes do
-      local quote = quoteTargets[quoteIndex]
-      if quote.userId == userId and quote.target == target then
-        return sendError(
-          message,
-          "alvo",
-          "Target <" .. target .. "> is already set"
-        )
-      end
-    end
+		local totalQuotes = #quoteTargets
+		for quoteIndex = 1, totalQuotes do
+			local quote = quoteTargets[quoteIndex]
+			if quote.userId == userId and quote.target == target then
+				return sendError(
+					message,
+					"alvo",
+					"Target <" .. target .. "> is already set"
+				)
+			end
+		end
 
 		quoteTargets[totalQuotes + 1] = targetData
 
@@ -8118,7 +8118,7 @@ client:on("ready", function()
 			end,
 
 			reminders = reminders,
-      retriggerGamesCommands = retriggerGamesCommands,
+			retriggerGamesCommands = retriggerGamesCommands,
 
 			save = save,
 			saveGlobalCommands = saveGlobalCommands,
@@ -8260,7 +8260,7 @@ local isLikelyCommand = function(message)
 	local prefix = "!"
 	local command = string.match(message.content, "^" .. prefix .. "%s*(%S+)[\n ]+(.*)")
 	command = command or string.match(message.content, "^" .. prefix .. "%s*(%S+)")
-  return not not command
+	return not not command
 end
 messageCreate = function(message, skipChannelActivity)
 	-- Ignore its own messages
@@ -8414,7 +8414,7 @@ messageCreate = function(message, skipChannelActivity)
 		else
 			throwError(message, { "Global Command [" .. string.upper(command) .. "]" }, globalCommandCall, cmd, message, parameters, command)
 		end
-    return true
+		return true
 	end
 end
 messageDelete = function(message, skipChannelActivity)
@@ -8869,97 +8869,97 @@ clock:on("hour", function()
 end)
 
 retriggerGamesCommands = function()
-  log("INFO", "Checking #games", logColor.green)
-  local channel = client:getGuild(channels["guild"]):getChannel(channels["games"])
-  local messages = channel:getMessages(100)
+	log("INFO", "Checking #games", logColor.green)
+	local channel = client:getGuild(channels["guild"]):getChannel(channels["games"])
+	local messages = channel:getMessages(100)
 
-  local memberMessages, lastBotMessageTimestamp, createdAt = {}, 0
-  for message in messages:iter() do
-    if message.author.id == client.user.id then
-      createdAt = message.createdAt
-      if createdAt > lastBotMessageTimestamp then
-        lastBotMessageTimestamp = createdAt
-      end
-    else
-      memberMessages[#memberMessages + 1] = message
-    end
-  end
+	local memberMessages, lastBotMessageTimestamp, createdAt = {}, 0
+	for message in messages:iter() do
+		if message.author.id == client.user.id then
+			createdAt = message.createdAt
+			if createdAt > lastBotMessageTimestamp then
+				lastBotMessageTimestamp = createdAt
+			end
+		else
+			memberMessages[#memberMessages + 1] = message
+		end
+	end
 
-  table.sort(memberMessages, function(msg1, msg2)
-    return msg1.createdAt < msg2.createdAt
-  end)
+	table.sort(memberMessages, function(msg1, msg2)
+		return msg1.createdAt < msg2.createdAt
+	end)
 
-  local gameCommands = {}
-  for index = 1, #memberMessages do
-    local message = memberMessages[index]
-    if message.createdAt > lastBotMessageTimestamp and isLikelyCommand(message) then
-      gameCommands[#gameCommands + 1] = {
-        author = message.author.id,
-        message = message
-      }
-    end
-  end
+	local gameCommands = {}
+	for index = 1, #memberMessages do
+		local message = memberMessages[index]
+		if message.createdAt > lastBotMessageTimestamp and isLikelyCommand(message) then
+			gameCommands[#gameCommands + 1] = {
+				author = message.author.id,
+				message = message
+			}
+		end
+	end
 
-  local SAME_AUTHOR_DELAY = 5.5 * 60 * 1000   -- 5.5 minutes
-  local DIFFERENT_AUTHOR_DELAY = 5 * 1000     -- 5 seconds
+	local SAME_AUTHOR_DELAY = 5.5 * 60 * 1000   -- 5.5 minutes
+	local DIFFERENT_AUTHOR_DELAY = 5 * 1000     -- 5 seconds
 
-  local function nowMs()
-    return os.time() * 1000
-  end
+	local function nowMs()
+		return os.time() * 1000
+	end
 
-  local index = 1
-  local authorCooldowns = {}
+	local index = 1
+	local authorCooldowns = {}
 
-  local function processNext()
-    if index > #gameCommands then
-      log("INFO", "Completed #games message", logColor.green)
-      return
-    end
+	local function processNext()
+		if index > #gameCommands then
+			log("INFO", "Completed #games message", logColor.green)
+			return
+		end
 
-    local data = gameCommands[index]
-    local currentAuthor = data.author
-    local now = nowMs()
+		local data = gameCommands[index]
+		local currentAuthor = data.author
+		local now = nowMs()
 
-    if not authorCooldowns[currentAuthor] then
-      authorCooldowns[currentAuthor] = 0
-    end
+		if not authorCooldowns[currentAuthor] then
+			authorCooldowns[currentAuthor] = 0
+		end
 
-    -- If author still on cooldown, wait until allowed
-    local cooldownRemaining = authorCooldowns[currentAuthor] - now
+		-- If author still on cooldown, wait until allowed
+		local cooldownRemaining = authorCooldowns[currentAuthor] - now
 
-    if cooldownRemaining > 0 then
-      log("INFO", string.format("\t\tAuthor on cooldown, waiting %s ms", cooldownRemaining), logColor.green)
+		if cooldownRemaining > 0 then
+			log("INFO", string.format("\t\tAuthor on cooldown, waiting %s ms", cooldownRemaining), logColor.green)
 
-      timer.setTimeout(cooldownRemaining, coroutine.wrap(function()
-        processNext()
-      end))
+			timer.setTimeout(cooldownRemaining, coroutine.wrap(function()
+				processNext()
+			end))
 
-      return
-    end
+			return
+		end
 
-    -- Execute message
-    log("INFO", string.format("\tChecking message %q from %q in #games", data.message.content, data.message.author.name), logColor.green)
-    local wasCommand = messageCreate(data.message)
+		-- Execute message
+		log("INFO", string.format("\tChecking message %q from %q in #games", data.message.content, data.message.author.name), logColor.green)
+		local wasCommand = messageCreate(data.message)
 
-    if wasCommand then
-      -- Set real cooldown
-      authorCooldowns[currentAuthor] = nowMs() + SAME_AUTHOR_DELAY
+		if wasCommand then
+			-- Set real cooldown
+			authorCooldowns[currentAuthor] = nowMs() + SAME_AUTHOR_DELAY
 
-      log("INFO", string.format("\tSet cooldown until %s", authorCooldowns[currentAuthor]), logColor.green)
-      
-      -- Optional small spacing before next message
-      timer.setTimeout(DIFFERENT_AUTHOR_DELAY, coroutine.wrap(function()
-        index = index + 1
-        processNext()
-      end))
-    else
-      -- No delay if not a command
-      index = index + 1
-      processNext()
-    end
-  end
+			log("INFO", string.format("\tSet cooldown until %s", authorCooldowns[currentAuthor]), logColor.green)
+			
+			-- Optional small spacing before next message
+			timer.setTimeout(DIFFERENT_AUTHOR_DELAY, coroutine.wrap(function()
+				index = index + 1
+				processNext()
+			end))
+		else
+			-- No delay if not a command
+			index = index + 1
+			processNext()
+		end
+	end
 
-  processNext()
+	processNext()
 end
 
 client:run(os.readFile("Content/token.txt", "*l"))
