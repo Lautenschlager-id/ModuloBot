@@ -145,6 +145,7 @@ local channels = {
 	["greetings"] = "598898246500483072",
 	["breach"] = "718659508980809758",
 	["games"] = "574279126073212928",
+  ["honeypot"] = "1497418908511240202",
 }
 
 local botIds = {
@@ -4795,11 +4796,14 @@ commands["remind"] = {
 commands["report"] = {
 	auth = permissions.public,
 	description = "Reports a message.",
-	f = function(message, parameters)
+	f = function(message, parameters, isHoneypot)
 		local syntax = "To report a message, please make sure that your developer mode on discord is enabled. Use the command `!report message_id report_reason`"
 
-		message:delete()
-		if parameters and #parameters > 0 then
+		if not isHoneypot then
+      message:delete()
+    end
+
+    if parameters and #parameters > 0 then
 			local msg, reason = string.match(parameters, "^(%d+)[\n ]+(.+)$")
 
 			if msg and reason then
@@ -4811,8 +4815,10 @@ commands["report"] = {
 					embed.author = nil
 					embed.fields = nil
 
+          local reporterName = isHoneypot and ("**HONEYPOT** <#" .. channels["honeypot"] .. ">") or ("**" .. message.member.name .. "** <@" .. message.member.id .. ">")
+
 					local report = client:getChannel(channels["report"]):send({
-						content = "Message from **" .. (msg.member or msg.author).name .. "** <@" .. msg.author.id .. ">\nReported by: **" .. message.member.name .. "** <@" .. message.member.id .. ">\n\nSource: <" .. msg.link .. "> | Reason:\n```\n" .. tostring(reason) .. "```",
+						content = "Message from **" .. (msg.member or msg.author).name .. "** <@" .. msg.author.id .. ">\nReported by: " .. reporterName .. "\n\nSource: <" .. msg.link .. "> | Reason:\n```\n" .. tostring(reason) .. "```",
 						embed = embed
 					})
 
@@ -4820,6 +4826,8 @@ commands["report"] = {
 					report:addReaction(reactions.bomb)
 					report:addReaction(reactions.boot)
 					report:addReaction(reactions.x)
+
+          return report
 				else
 					message.author:send({ embed = { color = color.err, title = "<:ban:504779866919403520> Report", description = "Invalid message. " .. syntax } })
 				end
@@ -7870,6 +7878,26 @@ channelReactionBehavior["region"] = {
 	end
 }
 
+channelBehavior["honeypot"] = {
+	f = function(message)
+		local report = commands["report"].f(
+      message,
+      message.id .. " HONEYPOT!",
+      true
+    )
+    if not report then
+      error("Honeypot failed for message " .. message.id)
+    end
+    channelReactionBehavior["report"].f_Add(
+      report,
+      report.channel,
+      reactions.bomb,
+      client.user.id,
+      true
+    )
+	end
+}
+
 -- Audit logs --
 local auditLogs
 do
@@ -7926,7 +7954,7 @@ do
 		if log.reason then
 			fields[#fields + 1] = {
 				name = "Reason",
-				value = "```Lua\n" .. reason .. "```"
+				value = "```Lua\n" .. tostring(reason) .. "```"
 			}
 		end
 		if object then
@@ -8004,6 +8032,16 @@ local wrapF = function(f)
 end
 
 local retriggerGamesCommands
+
+local checkHoneypotChannel = function()
+  local channel = client:getGuild(channels["guild"]):getChannel(channels["honeypot"])
+
+  for message in channel:getMessages():iter() do
+    if message.author.id ~= client.user.id then
+      channelBehavior["honeypot"].f(message)
+    end
+  end
+end
 
 --[[ Events ]]--
 client:on("ready", function()
@@ -8083,6 +8121,7 @@ client:on("ready", function()
 
 			channelBehavior = channelBehavior,
 			channelReactionBehavior = channelReactionBehavior,
+      checkHoneypotChannel = checkHoneypotChannel,
 			client = client,
 			cmdData = cmdData,
 			commands = commands,
@@ -8199,6 +8238,7 @@ client:on("ready", function()
 	end
 
 	log("INFO", "Running as '" .. client.user.name .. "'", logColor.green)
+  throwError(nil, "checkHoneypotChannel", checkHoneypotChannel)
 	throwError(nil, "RetriggerGamesCommands", retriggerGamesCommands)
 end)
 
@@ -8963,3 +9003,4 @@ retriggerGamesCommands = function()
 end
 
 client:run(os.readFile("Content/token.txt", "*l"))
+
